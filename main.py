@@ -2,7 +2,6 @@
 
 import os
 import random
-import math
 
 from kivy.app import App
 from kivy.clock import Clock
@@ -18,6 +17,7 @@ from kivy.graphics import (
     Triangle,
 )
 from kivy.metrics import dp
+from kivy.properties import ListProperty
 from kivy.storage.jsonstore import JsonStore
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.boxlayout import BoxLayout
@@ -28,11 +28,56 @@ from kivy.uix.screenmanager import Screen, ScreenManager, SlideTransition
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.widget import Widget
 
+
+# ============================================================
+# FONT REGISTRATION (MUST BE BEFORE ANY Label)
+# ============================================================
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _find_font():
+    """Try to locate the Arabic font in several possible locations."""
+    candidates = [
+        os.path.join(BASE_DIR, "NotoNaskhArabic-Regular.ttf"),
+        "NotoNaskhArabic-Regular.ttf",
+        os.path.join(os.getcwd(), "NotoNaskhArabic-Regular.ttf"),
+    ]
+    try:
+        app = App.get_running_app()
+        if app:
+            candidates.insert(
+                0,
+                os.path.join(app.directory, "NotoNaskhArabic-Regular.ttf"),
+            )
+    except Exception:
+        pass
+
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return candidates[0]
+
+
+_FONT_PATH = _find_font()
+
+try:
+    LabelBase.register(name="Arabic", fn_regular=_FONT_PATH)
+except Exception:
+    # If font file is missing, Kivy falls back to default (will show boxes)
+    pass
+
+
+# ============================================================
+# ARABIC TEXT SHAPING
+# ============================================================
+
 try:
     import arabic_reshaper
     from bidi.algorithm import get_display
 
     def ar(text):
+        """Prepare Arabic text for correct Kivy display."""
         return get_display(arabic_reshaper.reshape(text))
 
 except Exception:
@@ -45,11 +90,24 @@ except Exception:
 # PATHS
 # ============================================================
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-
 def asset(path):
-    return os.path.join(BASE_DIR, path)
+    """Find asset in several possible locations (Android-friendly)."""
+    candidates = [
+        os.path.join(BASE_DIR, path),
+        path,
+        os.path.join(os.getcwd(), path),
+    ]
+    try:
+        app = App.get_running_app()
+        if app:
+            candidates.insert(0, os.path.join(app.directory, path))
+    except Exception:
+        pass
+
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return candidates[0]
 
 
 def image_path(filename):
@@ -61,26 +119,7 @@ def audio_path(filename):
 
 
 # ============================================================
-# ARABIC FONT
-# ============================================================
-
-FONT_PATH = asset("NotoNaskhArabic-Regular.ttf")
-FONT_NAME = "ArabicFont"
-
-try:
-    if os.path.exists(FONT_PATH):
-        LabelBase.register(
-            name=FONT_NAME,
-            fn_regular=FONT_PATH
-        )
-    else:
-        FONT_NAME = "Roboto"
-except Exception:
-    FONT_NAME = "Roboto"
-
-
-# ============================================================
-# COLORS
+# COLORS / THEME
 # ============================================================
 
 BG_COLOR = (0.965, 0.975, 0.995, 1)
@@ -107,26 +146,20 @@ CARD_COLORS = [
 
 
 # ============================================================
-# LABEL
+# BASIC HELPERS
 # ============================================================
 
 def make_label(text="", size=20, color=TEXT, **kwargs):
-
     label = Label(
         text=ar(text),
-        font_name=FONT_NAME,
         font_size=dp(size),
         color=color,
+        font_name="Arabic",
         halign="center",
         valign="middle",
         **kwargs
     )
-
-    label.bind(
-        size=lambda obj, value:
-        setattr(obj, "text_size", value)
-    )
-
+    label.bind(size=lambda obj, value: setattr(obj, "text_size", value))
     return label
 
 
@@ -144,12 +177,11 @@ class RoundButton(ButtonBehavior, Label):
         height=52,
         **kwargs
     ):
-
         super().__init__(
             text=ar(text),
-            font_name=FONT_NAME,
             color=text_color,
             font_size=dp(18),
+            font_name="Arabic",
             halign="center",
             valign="middle",
             size_hint_y=None,
@@ -159,17 +191,10 @@ class RoundButton(ButtonBehavior, Label):
 
         self.button_color = button_color
         self.normal_color = button_color
-        self.pressed_color = tuple(
-            max(0, x * 0.82)
-            for x in button_color
-        )
+        self.pressed_color = tuple(max(0, x * 0.82) for x in button_color)
 
         with self.canvas.before:
-
-            self.bg_color = Color(
-                *self.normal_color
-            )
-
+            self.bg_color = Color(*self.normal_color)
             self.bg_rect = RoundedRectangle(
                 pos=self.pos,
                 size=self.size,
@@ -182,16 +207,13 @@ class RoundButton(ButtonBehavior, Label):
         )
 
     def update_background(self, *args):
-
         self.bg_rect.pos = self.pos
         self.bg_rect.size = self.size
 
     def on_press(self):
-
         self.bg_color.rgba = self.pressed_color
 
     def on_release(self):
-
         self.bg_color.rgba = self.normal_color
 
 
@@ -209,7 +231,6 @@ class RoundedCard(ButtonBehavior, BoxLayout):
         spacing=5,
         **kwargs
     ):
-
         super().__init__(
             orientation=orientation,
             padding=dp(padding),
@@ -220,24 +241,14 @@ class RoundedCard(ButtonBehavior, BoxLayout):
         self.card_color = card_color
 
         with self.canvas.before:
-
-            self.shadow_color = Color(
-                0, 0, 0, 0.08
-            )
-
+            self.shadow_color = Color(0, 0, 0, 0.08)
             self.shadow_rect = RoundedRectangle(
-                pos=(
-                    self.x + dp(2),
-                    self.y - dp(2)
-                ),
+                pos=(self.x + dp(2), self.y - dp(2)),
                 size=self.size,
                 radius=[dp(20)]
             )
 
-            self.bg_color = Color(
-                *card_color
-            )
-
+            self.bg_color = Color(*card_color)
             self.bg_rect = RoundedRectangle(
                 pos=self.pos,
                 size=self.size,
@@ -250,556 +261,26 @@ class RoundedCard(ButtonBehavior, BoxLayout):
         )
 
     def update_card(self, *args):
-
         self.shadow_rect.pos = (
             self.x + dp(2),
             self.y - dp(2)
         )
-
         self.shadow_rect.size = self.size
 
         self.bg_rect.pos = self.pos
         self.bg_rect.size = self.size
 
     def on_press(self):
-
         self.bg_color.rgba = tuple(
-            max(0, x * 0.92)
-            for x in self.card_color
+            max(0, x * 0.92) for x in self.card_color
         )
 
     def on_release(self):
-
         self.bg_color.rgba = self.card_color
 
 
 # ============================================================
-# GRAPHICAL MENU ICONS
-# ============================================================
-
-class MenuIcon(Widget):
-
-    def __init__(self, kind="focus", **kwargs):
-
-        super().__init__(
-            size_hint_y=None,
-            height=dp(62),
-            **kwargs
-        )
-
-        self.kind = kind
-
-        with self.canvas:
-
-            self.main_color = Color(*BLUE)
-
-            self.a = Ellipse()
-            self.b = Ellipse()
-            self.c = Ellipse()
-
-            self.r1 = RoundedRectangle(
-                radius=[dp(8)]
-            )
-
-            self.r2 = RoundedRectangle(
-                radius=[dp(8)]
-            )
-
-            self.t1 = Triangle()
-
-            self.line1 = Line(
-                points=[0, 0, 1, 1],
-                width=dp(4),
-                opacity=0
-            )
-
-            self.bind(
-                pos=self.draw,
-                size=self.draw
-            )
-
-        Clock.schedule_once(
-            self.draw,
-            0
-        )
-
-    def draw(self, *args):
-
-        x, y = self.pos
-        w, h = self.size
-
-        cx = x + w / 2
-        cy = y + h / 2
-
-        self.main_color.rgba = BLUE
-
-        for item in [
-            self.a,
-            self.b,
-            self.c,
-            self.r1,
-            self.r2,
-            self.t1
-        ]:
-            item.opacity = 0
-
-        self.line1.opacity = 0
-
-        # Focus - eye
-        if self.kind == "focus":
-
-            self.main_color.rgba = BLUE
-
-            self.a.pos = (
-                cx - dp(32),
-                cy - dp(18)
-            )
-
-            self.a.size = (
-                dp(64),
-                dp(36)
-            )
-
-            self.a.opacity = 1
-
-            self.b.pos = (
-                cx - dp(9),
-                cy - dp(9)
-            )
-
-            self.b.size = (
-                dp(18),
-                dp(18)
-            )
-
-            self.b.opacity = 1
-
-        # Family
-        elif self.kind == "family":
-
-            self.main_color.rgba = NAVY
-
-            self.a.pos = (
-                cx - dp(9),
-                cy + dp(7)
-            )
-            self.a.size = (
-                dp(18),
-                dp(18)
-            )
-            self.a.opacity = 1
-
-            self.b.pos = (
-                cx - dp(30),
-                cy + dp(10)
-            )
-            self.b.size = (
-                dp(14),
-                dp(14)
-            )
-            self.b.opacity = 1
-
-            self.c.pos = (
-                cx + dp(16),
-                cy + dp(10)
-            )
-            self.c.size = (
-                dp(14),
-                dp(14)
-            )
-            self.c.opacity = 1
-
-            self.r1.pos = (
-                cx - dp(18),
-                cy - dp(25)
-            )
-            self.r1.size = (
-                dp(36),
-                dp(30)
-            )
-            self.r1.opacity = 1
-
-        # Shapes
-        elif self.kind == "shapes":
-
-            self.main_color.rgba = GREEN
-
-            self.a.pos = (
-                cx - dp(30),
-                cy - dp(10)
-            )
-            self.a.size = (
-                dp(22),
-                dp(22)
-            )
-            self.a.opacity = 1
-
-            self.r1.pos = (
-                cx + dp(4),
-                cy - dp(11)
-            )
-            self.r1.size = (
-                dp(22),
-                dp(22)
-            )
-            self.r1.opacity = 1
-
-            self.t1.points = [
-                cx - dp(7),
-                cy + dp(25),
-                cx - dp(25),
-                cy - dp(7),
-                cx + dp(11),
-                cy - dp(7)
-            ]
-            self.t1.opacity = 1
-
-        # Toilet
-        elif self.kind == "toilet":
-
-            self.main_color.rgba = GOLD
-
-            self.r1.pos = (
-                cx - dp(24),
-                cy - dp(20)
-            )
-            self.r1.size = (
-                dp(48),
-                dp(40)
-            )
-            self.r1.opacity = 1
-
-            self.a.pos = (
-                cx - dp(15),
-                cy + dp(3)
-            )
-            self.a.size = (
-                dp(30),
-                dp(15)
-            )
-            self.a.opacity = 1
-
-        # Wudu / water
-        elif self.kind == "wudu":
-
-            self.main_color.rgba = BLUE
-
-            self.a.pos = (
-                cx - dp(10),
-                cy - dp(24)
-            )
-            self.a.size = (
-                dp(20),
-                dp(32)
-            )
-            self.a.opacity = 1
-
-            self.t1.points = [
-                cx,
-                cy + dp(28),
-                cx - dp(18),
-                cy,
-                cx + dp(18),
-                cy
-            ]
-            self.t1.opacity = 1
-
-        # Communication
-        elif self.kind == "communication":
-
-            self.main_color.rgba = NAVY
-
-            self.r1.pos = (
-                cx - dp(32),
-                cy - dp(17)
-            )
-            self.r1.size = (
-                dp(64),
-                dp(38)
-            )
-            self.r1.opacity = 1
-
-            self.t1.points = [
-                cx - dp(15),
-                cy - dp(16),
-                cx - dp(3),
-                cy - dp(29),
-                cx + dp(1),
-                cy - dp(13)
-            ]
-            self.t1.opacity = 1
-
-        # Hygiene
-        elif self.kind == "hygiene":
-
-            self.main_color.rgba = GREEN
-
-            self.r1.pos = (
-                cx - dp(25),
-                cy - dp(12)
-            )
-            self.r1.size = (
-                dp(50),
-                dp(25)
-            )
-            self.r1.opacity = 1
-
-            self.b.pos = (
-                cx + dp(18),
-                cy + dp(10)
-            )
-            self.b.size = (
-                dp(9),
-                dp(9)
-            )
-            self.b.opacity = 1
-
-        # Rewards
-        elif self.kind == "rewards":
-
-            self.main_color.rgba = GOLD
-
-            points = []
-
-            for i in range(10):
-
-                angle = math.radians(
-                    90 + i * 36
-                )
-
-                radius = (
-                    dp(29)
-                    if i % 2 == 0
-                    else dp(13)
-                )
-
-                points.extend([
-                    cx + radius * math.cos(angle),
-                    cy + radius * math.sin(angle)
-                ])
-
-            self.line1.points = points
-            self.line1.opacity = 1
-
-
-# ============================================================
-# OBJECT ICONS FOR FOCUS
-# ============================================================
-
-class ObjectIcon(Widget):
-
-    def __init__(self, kind="apple", **kwargs):
-
-        super().__init__(**kwargs)
-
-        self.kind = kind
-
-        with self.canvas:
-
-            self.c1 = Color(*RED)
-            self.c2 = Color(*GREEN)
-
-            self.body = Ellipse()
-            self.body2 = Ellipse()
-
-            self.rect = RoundedRectangle(
-                radius=[dp(8)]
-            )
-
-            self.triangle1 = Triangle()
-            self.triangle2 = Triangle()
-
-            self.wheel1 = Ellipse()
-            self.wheel2 = Ellipse()
-
-            self.line = Line(
-                points=[0, 0, 1, 1],
-                width=dp(3),
-                opacity=0
-            )
-
-        self.bind(
-            pos=self.draw,
-            size=self.draw
-        )
-
-        Clock.schedule_once(
-            self.draw,
-            0
-        )
-
-    def draw(self, *args):
-
-        x, y = self.pos
-        w, h = self.size
-
-        cx = x + w / 2
-        cy = y + h / 2
-
-        for item in [
-            self.body,
-            self.body2,
-            self.rect,
-            self.triangle1,
-            self.triangle2,
-            self.wheel1,
-            self.wheel2
-        ]:
-            item.opacity = 0
-
-        self.line.opacity = 0
-
-        if self.kind == "apple":
-
-            self.c1.rgba = RED
-
-            self.body.pos = (
-                cx - dp(25),
-                cy - dp(20)
-            )
-            self.body.size = (
-                dp(50),
-                dp(45)
-            )
-            self.body.opacity = 1
-
-            self.c2.rgba = GREEN
-
-            self.triangle1.points = [
-                cx + dp(5),
-                cy + dp(25),
-                cx + dp(22),
-                cy + dp(32),
-                cx + dp(15),
-                cy + dp(15)
-            ]
-            self.triangle1.opacity = 1
-
-        elif self.kind == "car":
-
-            self.c1.rgba = BLUE
-
-            self.rect.pos = (
-                cx - dp(45),
-                cy - dp(15)
-            )
-            self.rect.size = (
-                dp(90),
-                dp(35)
-            )
-            self.rect.opacity = 1
-
-            self.triangle1.points = [
-                cx - dp(28),
-                cy + dp(18),
-                cx - dp(8),
-                cy + dp(18),
-                cx - dp(18),
-                cy + dp(35)
-            ]
-            self.triangle1.opacity = 1
-
-            self.triangle2.points = [
-                cx - dp(5),
-                cy + dp(18),
-                cx + dp(15),
-                cy + dp(18),
-                cx + dp(5),
-                cy + dp(35)
-            ]
-            self.triangle2.opacity = 1
-
-            self.wheel1.pos = (
-                cx - dp(32),
-                cy - dp(27)
-            )
-            self.wheel1.size = (
-                dp(20),
-                dp(20)
-            )
-            self.wheel1.opacity = 1
-
-            self.wheel2.pos = (
-                cx + dp(12),
-                cy - dp(27)
-            )
-            self.wheel2.size = (
-                dp(20),
-                dp(20)
-            )
-            self.wheel2.opacity = 1
-
-        elif self.kind == "cat":
-
-            self.c1.rgba = GOLD
-
-            self.body.pos = (
-                cx - dp(28),
-                cy - dp(20)
-            )
-            self.body.size = (
-                dp(56),
-                dp(50)
-            )
-            self.body.opacity = 1
-
-            self.triangle1.points = [
-                cx - dp(25),
-                cy + dp(22),
-                cx - dp(18),
-                cy + dp(45),
-                cx - dp(3),
-                cy + dp(25)
-            ]
-            self.triangle1.opacity = 1
-
-            self.triangle2.points = [
-                cx + dp(3),
-                cy + dp(25),
-                cx + dp(18),
-                cy + dp(45),
-                cx + dp(25),
-                cy + dp(22)
-            ]
-            self.triangle2.opacity = 1
-
-        elif self.kind == "dog":
-
-            self.c1.rgba = GOLD
-
-            self.body.pos = (
-                cx - dp(28),
-                cy - dp(20)
-            )
-            self.body.size = (
-                dp(56),
-                dp(50)
-            )
-            self.body.opacity = 1
-
-            self.triangle1.points = [
-                cx - dp(28),
-                cy + dp(22),
-                cx - dp(45),
-                cy + dp(5),
-                cx - dp(20),
-                cy + dp(12)
-            ]
-            self.triangle1.opacity = 1
-
-            self.triangle2.points = [
-                cx + dp(28),
-                cy + dp(22),
-                cx + dp(45),
-                cy + dp(5),
-                cx + dp(20),
-                cy + dp(12)
-            ]
-            self.triangle2.opacity = 1
-
-
-# ============================================================
-# SAFE SHAPE WIDGET
+# SHAPE DRAWING WIDGET
 # ============================================================
 
 class ShapeWidget(Widget):
@@ -810,31 +291,21 @@ class ShapeWidget(Widget):
         shape_color=BLUE,
         **kwargs
     ):
-
         super().__init__(**kwargs)
 
         self.shape = shape
         self.shape_color = shape_color
 
         with self.canvas:
-
-            self.color_instruction = Color(
-                *shape_color
-            )
+            self.color_instruction = Color(*shape_color)
 
             self.shape_ellipse = Ellipse()
-
             self.shape_rectangle = Rectangle()
-
             self.shape_triangle = Triangle()
 
-            # IMPORTANT:
-            # Never initialize Line with empty points.
             self.shape_line = Line(
-                points=[0, 0, 1, 1],
                 width=dp(5),
-                close=True,
-                opacity=0
+                close=True
             )
 
         self.bind(
@@ -842,144 +313,82 @@ class ShapeWidget(Widget):
             size=self.draw_shape
         )
 
-        Clock.schedule_once(
-            self.draw_shape,
-            0
-        )
+        Clock.schedule_once(self.draw_shape, 0)
 
     def draw_shape(self, *args):
-
-        self.color_instruction.rgba = (
-            self.shape_color
-        )
-
-        x = self.x
-        y = self.y
-        w = self.width
-        h = self.height
+        x, y = self.x, self.y
+        w, h = self.width, self.height
 
         size = min(w, h) * 0.62
+        if size <= 0:
+            return
 
         cx = x + w / 2
         cy = y + h / 2
-
         left = cx - size / 2
         bottom = cy - size / 2
 
-        self.shape_ellipse.size = (
-            size,
-            size
-        )
-
-        self.shape_ellipse.pos = (
-            left,
-            bottom
-        )
-
-        self.shape_rectangle.size = (
-            size,
-            size
-        )
-
-        self.shape_rectangle.pos = (
-            left,
-            bottom
-        )
-
+        # Safe reset
+        self.shape_ellipse.size = (size, size)
+        self.shape_ellipse.pos = (left, bottom)
+        self.shape_rectangle.size = (size, size)
+        self.shape_rectangle.pos = (left, bottom)
         self.shape_triangle.points = [
-            cx,
-            cy + size / 2,
-            cx - size / 2,
-            cy - size / 2,
-            cx + size / 2,
-            cy - size / 2,
+            cx, cy + size / 2,
+            cx - size / 2, cy - size / 2,
+            cx + size / 2, cy - size / 2,
         ]
 
+        # Hide all first
         self.shape_ellipse.opacity = 0
         self.shape_rectangle.opacity = 0
         self.shape_triangle.opacity = 0
-        self.shape_line.opacity = 0
+        self.shape_line.points = []
 
         if self.shape == "circle":
-
             self.shape_ellipse.opacity = 1
 
         elif self.shape == "square":
-
             self.shape_rectangle.opacity = 1
 
         elif self.shape == "triangle":
-
             self.shape_triangle.opacity = 1
 
         elif self.shape == "rectangle":
-
+            self.shape_rectangle.opacity = 1
             rect_w = size * 1.25
             rect_h = size * 0.72
-
-            self.shape_rectangle.size = (
-                rect_w,
-                rect_h
-            )
-
+            self.shape_rectangle.size = (rect_w, rect_h)
             self.shape_rectangle.pos = (
                 cx - rect_w / 2,
-                cy - rect_h / 2
+                cy - rect_h / 2,
             )
 
-            self.shape_rectangle.opacity = 1
-
         elif self.shape == "star":
-
+            import math
             points = []
-
             for i in range(10):
-
-                angle = math.radians(
-                    90 + i * 36
-                )
-
-                radius = (
-                    size / 2
-                    if i % 2 == 0
-                    else size / 4
-                )
-
+                angle = math.radians(90 + i * 36)
+                radius = size / 2 if i % 2 == 0 else size / 4
                 points.extend([
                     cx + radius * math.cos(angle),
-                    cy + radius * math.sin(angle)
+                    cy + radius * math.sin(angle),
                 ])
-
-            self.shape_line.points = points
-            self.shape_line.opacity = 1
+            if len(points) >= 4:
+                self.shape_line.points = points
 
         elif self.shape == "heart":
-
             points = [
-                cx,
-                cy - size * 0.42,
-
-                cx - size * 0.45,
-                cy - size * 0.02,
-
-                cx - size * 0.40,
-                cy + size * 0.28,
-
-                cx,
-                cy + size * 0.48,
-
-                cx + size * 0.40,
-                cy + size * 0.28,
-
-                cx + size * 0.45,
-                cy - size * 0.02,
-
-                cx,
-                cy - size * 0.42
+                cx, cy - size * 0.42,
+                cx - size * 0.45, cy - size * 0.02,
+                cx - size * 0.40, cy + size * 0.28,
+                cx, cy + size * 0.48,
+                cx + size * 0.40, cy + size * 0.28,
+                cx + size * 0.45, cy - size * 0.02,
+                cx, cy - size * 0.42,
             ]
-
-            self.shape_line.points = points
-            self.shape_line.opacity = 1
+            if len(points) >= 4:
+                self.shape_line.points = points
 
 
 # ============================================================
@@ -989,14 +398,9 @@ class ShapeWidget(Widget):
 class BaseScreen(Screen):
 
     def on_pre_enter(self, *args):
-
         Window.clearcolor = BG_COLOR
 
-    def build_header(
-        self,
-        title,
-        show_back=True
-    ):
+    def build_header(self, title, show_back=True):
 
         header = BoxLayout(
             orientation="horizontal",
@@ -1026,20 +430,20 @@ class BaseScreen(Screen):
 
         else:
 
-            header.add_widget(
-                Widget(
-                    size_hint_x=None,
-                    width=dp(90)
-                )
+            spacer = Widget(
+                size_hint_x=None,
+                width=dp(90)
             )
 
-        header.add_widget(
-            make_label(
-                title,
-                size=23,
-                color=NAVY
-            )
+            header.add_widget(spacer)
+
+        title_label = make_label(
+            title,
+            size=23,
+            color=NAVY
         )
+
+        header.add_widget(title_label)
 
         stars = make_label(
             "★ 0",
@@ -1057,38 +461,27 @@ class BaseScreen(Screen):
         return header
 
     def refresh_stars(self):
-
         if hasattr(self, "star_header"):
-
             app = App.get_running_app()
-
-            self.star_header.text = ar(
-                f"★ {app.stars}"
-            )
+            self.star_header.text = f"★ {app.stars}"
 
     def go_main(self):
+        manager = self.manager
 
-        if self.manager:
-
-            self.manager.transition = (
-                SlideTransition(
-                    direction="right"
-                )
+        if manager:
+            manager.transition = SlideTransition(
+                direction="right"
             )
-
-            self.manager.current = (
-                "main_menu"
-            )
+            manager.current = "main_menu"
 
 
 # ============================================================
-# SPLASH
+# SPLASH SCREEN
 # ============================================================
 
 class SplashScreen(BaseScreen):
 
     def __init__(self, **kwargs):
-
         super().__init__(**kwargs)
 
         layout = BoxLayout(
@@ -1101,44 +494,44 @@ class SplashScreen(BaseScreen):
             Widget(size_hint_y=0.15)
         )
 
-        layout.add_widget(
-            Image(
-                source=asset("app_icon.png"),
-                allow_stretch=True,
-                keep_ratio=True,
-                size_hint_y=0.42
-            )
+        icon = Image(
+            source=asset("app_icon.png"),
+            allow_stretch=True,
+            keep_ratio=True,
+            size_hint_y=0.42
         )
 
-        layout.add_widget(
-            make_label(
-                "عالم أحمد",
-                size=34,
-                color=NAVY,
-                size_hint_y=None,
-                height=dp(65)
-            )
+        layout.add_widget(icon)
+
+        title = make_label(
+            "عالم أحمد",
+            size=34,
+            color=NAVY,
+            size_hint_y=None,
+            height=dp(65)
         )
 
-        layout.add_widget(
-            make_label(
-                "أهلاً أحمد!",
-                size=25,
-                color=GOLD,
-                size_hint_y=None,
-                height=dp(55)
-            )
+        layout.add_widget(title)
+
+        greeting = make_label(
+            "أهلاً أحمد!",
+            size=25,
+            color=GOLD,
+            size_hint_y=None,
+            height=dp(55)
         )
 
-        layout.add_widget(
-            make_label(
-                "هيا نتعلم ونلعب معًا",
-                size=19,
-                color=MUTED,
-                size_hint_y=None,
-                height=dp(50)
-            )
+        layout.add_widget(greeting)
+
+        subtitle = make_label(
+            "هيا نتعلم ونلعب معًا",
+            size=19,
+            color=MUTED,
+            size_hint_y=None,
+            height=dp(50)
         )
+
+        layout.add_widget(subtitle)
 
         layout.add_widget(
             Widget(size_hint_y=0.20)
@@ -1166,18 +559,17 @@ class SplashScreen(BaseScreen):
 class MainMenuScreen(BaseScreen):
 
     sections = [
-        ("focus", "التركيز والانتباه", "focus"),
-        ("family", "عائلتي", "family"),
-        ("shapes", "الأشكال", "shapes"),
-        ("toilet", "الحمام", "toilet"),
-        ("wudu", "الوضوء", "wudu"),
-        ("communication", "أريد / التواصل", "communication"),
-        ("hygiene", "النظافة", "hygiene"),
-        ("rewards", "المكافآت والتقدم", "rewards"),
+        ("★", "التركيز والانتباه", "focus"),
+        ("♥", "عائلتي", "family"),
+        ("▲", "الأشكال", "shapes"),
+        ("■", "الحمام", "toilet"),
+        ("●", "الوضوء", "wudu"),
+        ("◆", "أريد / التواصل", "communication"),
+        ("✓", "النظافة", "hygiene"),
+        ("★", "المكافآت والتقدم", "rewards"),
     ]
 
     def __init__(self, **kwargs):
-
         super().__init__(**kwargs)
 
         self.root_layout = BoxLayout(
@@ -1186,13 +578,15 @@ class MainMenuScreen(BaseScreen):
             spacing=dp(8)
         )
 
-        self.add_widget(
-            self.root_layout
-        )
+        self.add_widget(self.root_layout)
 
     def on_enter(self, *args):
 
         self.root_layout.clear_widgets()
+
+        # ----------------------------------------------------
+        # Header
+        # ----------------------------------------------------
 
         header = BoxLayout(
             orientation="horizontal",
@@ -1201,17 +595,15 @@ class MainMenuScreen(BaseScreen):
             padding=(dp(8), dp(5))
         )
 
-        header.add_widget(
-            Image(
-                source=image_path(
-                    "family_ahmed.png"
-                ),
-                allow_stretch=True,
-                keep_ratio=True,
-                size_hint_x=None,
-                width=dp(70)
-            )
+        profile_image = Image(
+            source=image_path("family_ahmed.png"),
+            allow_stretch=True,
+            keep_ratio=True,
+            size_hint_x=None,
+            width=dp(70)
         )
+
+        header.add_widget(profile_image)
 
         title_box = BoxLayout(
             orientation="vertical"
@@ -1233,9 +625,7 @@ class MainMenuScreen(BaseScreen):
             )
         )
 
-        header.add_widget(
-            title_box
-        )
+        header.add_widget(title_box)
 
         app = App.get_running_app()
 
@@ -1250,9 +640,11 @@ class MainMenuScreen(BaseScreen):
 
         header.add_widget(stars)
 
-        self.root_layout.add_widget(
-            header
-        )
+        self.root_layout.add_widget(header)
+
+        # ----------------------------------------------------
+        # Scroll area
+        # ----------------------------------------------------
 
         scroll = ScrollView(
             do_scroll_x=False
@@ -1266,62 +658,56 @@ class MainMenuScreen(BaseScreen):
         )
 
         grid.bind(
-            minimum_height=grid.setter(
-                "height"
-            )
+            minimum_height=grid.setter("height")
         )
 
-        for index, (
-            icon_kind,
-            title,
-            screen_name
-        ) in enumerate(self.sections):
+        for index, (icon, title, screen_name) in enumerate(
+            self.sections
+        ):
 
-            completed = (
-                screen_name in app.completed
-            )
+            completed = screen_name in app.completed
 
             card = RoundedCard(
                 card_color=CARD_COLORS[
                     index % len(CARD_COLORS)
                 ],
                 size_hint_y=None,
-                height=dp(165)
+                height=dp(155)
             )
 
-            card.add_widget(
-                MenuIcon(
-                    kind=icon_kind
-                )
+            icon_label = make_label(
+                icon,
+                size=45,
+                color=NAVY,
+                size_hint_y=None,
+                height=dp(55)
             )
 
-            card.add_widget(
-                make_label(
-                    title,
-                    size=19,
-                    color=TEXT
-                )
+            card.add_widget(icon_label)
+
+            title_label = make_label(
+                title,
+                size=19,
+                color=TEXT
             )
+
+            card.add_widget(title_label)
 
             status = (
-                "مكتمل"
+                "★ مكتمل"
                 if completed
                 else "اضغط للبدء"
             )
 
-            card.add_widget(
-                make_label(
-                    status,
-                    size=14,
-                    color=(
-                        GOLD
-                        if completed
-                        else MUTED
-                    ),
-                    size_hint_y=None,
-                    height=dp(28)
-                )
+            status_label = make_label(
+                status,
+                size=14,
+                color=GOLD if completed else MUTED,
+                size_hint_y=None,
+                height=dp(28)
             )
+
+            card.add_widget(status_label)
 
             card.bind(
                 on_release=lambda instance,
@@ -1332,36 +718,33 @@ class MainMenuScreen(BaseScreen):
             grid.add_widget(card)
 
         scroll.add_widget(grid)
+        self.root_layout.add_widget(scroll)
 
-        self.root_layout.add_widget(
-            scroll
+        # ----------------------------------------------------
+        # Footer
+        # ----------------------------------------------------
+
+        footer = make_label(
+            "اختر نشاطًا لنبدأ!",
+            size=17,
+            color=MUTED,
+            size_hint_y=None,
+            height=dp(42)
         )
 
-        self.root_layout.add_widget(
-            make_label(
-                "اختر نشاطًا لنبدأ!",
-                size=17,
-                color=MUTED,
-                size_hint_y=None,
-                height=dp(42)
-            )
-        )
+        self.root_layout.add_widget(footer)
 
     def open_section(self, name):
 
         if self.manager:
-
-            self.manager.transition = (
-                SlideTransition(
-                    direction="left"
-                )
+            self.manager.transition = SlideTransition(
+                direction="left"
             )
-
             self.manager.current = name
 
 
 # ============================================================
-# STEP SCREEN
+# GENERIC STEP LEARNING SCREEN
 # ============================================================
 
 class StepScreen(BaseScreen):
@@ -1373,7 +756,6 @@ class StepScreen(BaseScreen):
     complete_message = "أحسنت! أكملت النشاط."
 
     def __init__(self, **kwargs):
-
         super().__init__(**kwargs)
 
         self.current_step = 0
@@ -1385,9 +767,7 @@ class StepScreen(BaseScreen):
             spacing=dp(8)
         )
 
-        self.add_widget(
-            self.main_layout
-        )
+        self.add_widget(self.main_layout)
 
     def on_pre_enter(self, *args):
 
@@ -1399,8 +779,7 @@ class StepScreen(BaseScreen):
         self.build_ui()
 
         Clock.schedule_once(
-            lambda dt:
-            self.play_current_audio(),
+            lambda dt: self.play_current_audio(),
             0.4
         )
 
@@ -1409,12 +788,10 @@ class StepScreen(BaseScreen):
         self.main_layout.clear_widgets()
 
         self.main_layout.add_widget(
-            self.build_header(
-                self.title
-            )
+            self.build_header(self.title)
         )
 
-        self.progress_label = make_label(
+        progress = make_label(
             "",
             size=17,
             color=BLUE,
@@ -1422,22 +799,22 @@ class StepScreen(BaseScreen):
             height=dp(35)
         )
 
-        self.main_layout.add_widget(
-            self.progress_label
-        )
+        self.progress_label = progress
 
-        self.step_image = Image(
+        self.main_layout.add_widget(progress)
+
+        image = Image(
             source="",
             allow_stretch=True,
             keep_ratio=True,
             size_hint_y=0.55
         )
 
-        self.main_layout.add_widget(
-            self.step_image
-        )
+        self.step_image = image
 
-        self.caption_label = make_label(
+        self.main_layout.add_widget(image)
+
+        caption = make_label(
             "",
             size=24,
             color=NAVY,
@@ -1445,12 +822,12 @@ class StepScreen(BaseScreen):
             height=dp(65)
         )
 
-        self.main_layout.add_widget(
-            self.caption_label
-        )
+        self.caption_label = caption
+
+        self.main_layout.add_widget(caption)
 
         play_button = RoundButton(
-            text="استمع مرة أخرى",
+            text="🔊 استمع مرة أخرى",
             button_color=BLUE,
             height=52
         )
@@ -1460,9 +837,7 @@ class StepScreen(BaseScreen):
             self.play_current_audio()
         )
 
-        self.main_layout.add_widget(
-            play_button
-        )
+        self.main_layout.add_widget(play_button)
 
         buttons = BoxLayout(
             size_hint_y=None,
@@ -1470,47 +845,44 @@ class StepScreen(BaseScreen):
             spacing=dp(10)
         )
 
-        self.previous_button = RoundButton(
+        previous = RoundButton(
             text="السابق",
             button_color=MUTED,
             height=52
         )
 
-        self.previous_button.bind(
+        previous.bind(
             on_release=lambda *_:
             self.previous_step()
         )
 
-        self.next_button = RoundButton(
+        next_button = RoundButton(
             text="التالي",
             button_color=GREEN,
             height=52
         )
 
-        self.next_button.bind(
+        next_button.bind(
             on_release=lambda *_:
             self.next_step()
         )
 
-        buttons.add_widget(
-            self.previous_button
-        )
+        self.previous_button = previous
+        self.next_button = next_button
 
-        buttons.add_widget(
-            self.next_button
-        )
+        buttons.add_widget(previous)
+        buttons.add_widget(next_button)
 
-        self.main_layout.add_widget(
-            buttons
-        )
+        self.main_layout.add_widget(buttons)
 
         self.update_step()
 
     def update_step(self):
 
-        step = self.steps[
-            self.current_step
-        ]
+        if not self.steps:
+            return
+
+        step = self.steps[self.current_step]
 
         self.step_image.source = image_path(
             step["image"]
@@ -1520,28 +892,20 @@ class StepScreen(BaseScreen):
             step["text"]
         )
 
+        total = len(self.steps)
+
         self.progress_label.text = ar(
-            f"الخطوة {self.current_step + 1} "
-            f"من {len(self.steps)}"
+            f"الخطوة {self.current_step + 1} من {total}"
         )
 
         self.previous_button.disabled = (
             self.current_step == 0
         )
 
-        if self.current_step == len(
-            self.steps
-        ) - 1:
-
-            self.next_button.text = ar(
-                "أكملت"
-            )
-
+        if self.current_step == total - 1:
+            self.next_button.text = ar("أكملت")
         else:
-
-            self.next_button.text = ar(
-                "التالي"
-            )
+            self.next_button.text = ar("التالي")
 
         self.refresh_stars()
 
@@ -1550,10 +914,10 @@ class StepScreen(BaseScreen):
         if self.finished:
             return
 
+        step = self.steps[self.current_step]
+
         App.get_running_app().play_audio(
-            self.steps[
-                self.current_step
-            ]["audio"]
+            step["audio"]
         )
 
     def previous_step(self):
@@ -1563,24 +927,18 @@ class StepScreen(BaseScreen):
             self.current_step -= 1
 
             self.update_step()
-
             self.play_current_audio()
 
     def next_step(self):
 
         if self.finished:
-
             self.current_step = 0
             self.finished = False
-
             self.update_step()
             self.play_current_audio()
-
             return
 
-        if self.current_step < len(
-            self.steps
-        ) - 1:
+        if self.current_step < len(self.steps) - 1:
 
             App.get_running_app().play_audio(
                 "cheer.wav"
@@ -1589,8 +947,7 @@ class StepScreen(BaseScreen):
             self.current_step += 1
 
             Clock.schedule_once(
-                lambda dt:
-                self.update_and_play(),
+                lambda dt: self.update_and_play(),
                 0.7
             )
 
@@ -1613,7 +970,7 @@ class StepScreen(BaseScreen):
             self.section_id
         )
 
-        app.play_audio(
+        App.get_running_app().play_audio(
             self.complete_audio
         )
 
@@ -1626,12 +983,12 @@ class StepScreen(BaseScreen):
         )
 
         self.progress_label.text = ar(
-            "أحسنت! النشاط مكتمل"
+            "أحسنت! النشاط مكتمل ★"
         )
 
 
 # ============================================================
-# TOILET
+# BATHROOM
 # ============================================================
 
 class ToiletScreen(StepScreen):
@@ -1813,7 +1170,6 @@ class FamilyScreen(BaseScreen):
     ]
 
     def __init__(self, **kwargs):
-
         super().__init__(**kwargs)
 
         self.tapped = set()
@@ -1824,9 +1180,7 @@ class FamilyScreen(BaseScreen):
             spacing=dp(8)
         )
 
-        self.add_widget(
-            self.root_layout
-        )
+        self.add_widget(self.root_layout)
 
     def on_enter(self, *args):
 
@@ -1838,15 +1192,15 @@ class FamilyScreen(BaseScreen):
             self.build_header("عائلتي")
         )
 
-        self.root_layout.add_widget(
-            make_label(
-                "تعرف على أفراد عائلتك",
-                size=20,
-                color=NAVY,
-                size_hint_y=None,
-                height=dp(45)
-            )
+        intro = make_label(
+            "تعرف على أفراد عائلتك",
+            size=20,
+            color=NAVY,
+            size_hint_y=None,
+            height=dp(45)
         )
+
+        self.root_layout.add_widget(intro)
 
         grid = GridLayout(
             cols=2,
@@ -1856,9 +1210,7 @@ class FamilyScreen(BaseScreen):
         )
 
         grid.bind(
-            minimum_height=grid.setter(
-                "height"
-            )
+            minimum_height=grid.setter("height")
         )
 
         for index, (
@@ -1875,34 +1227,29 @@ class FamilyScreen(BaseScreen):
                 height=dp(205)
             )
 
-            card.add_widget(
-                Image(
-                    source=image_path(
-                        filename
-                    ),
-                    allow_stretch=True,
-                    keep_ratio=True
-                )
+            photo = Image(
+                source=image_path(filename),
+                allow_stretch=True,
+                keep_ratio=True
             )
 
-            card.add_widget(
-                make_label(
-                    name,
-                    size=21,
-                    color=NAVY,
-                    size_hint_y=None,
-                    height=dp(40)
-                )
+            card.add_widget(photo)
+
+            label = make_label(
+                name,
+                size=21,
+                color=NAVY,
+                size_hint_y=None,
+                height=dp(40)
             )
+
+            card.add_widget(label)
 
             card.bind(
                 on_release=lambda instance,
                 i=index,
                 snd=audio:
-                self.person_selected(
-                    i,
-                    snd
-                )
+                self.person_selected(i, snd)
             )
 
             grid.add_widget(card)
@@ -1913,9 +1260,7 @@ class FamilyScreen(BaseScreen):
 
         scroll.add_widget(grid)
 
-        self.root_layout.add_widget(
-            scroll
-        )
+        self.root_layout.add_widget(scroll)
 
         self.status = make_label(
             "اضغط على صورة لسماع الاسم",
@@ -1925,17 +1270,11 @@ class FamilyScreen(BaseScreen):
             height=dp(40)
         )
 
-        self.root_layout.add_widget(
-            self.status
-        )
+        self.root_layout.add_widget(self.status)
 
         self.refresh_stars()
 
-    def person_selected(
-        self,
-        index,
-        audio
-    ):
+    def person_selected(self, index, audio):
 
         self.tapped.add(index)
 
@@ -1943,12 +1282,10 @@ class FamilyScreen(BaseScreen):
             audio
         )
 
-        if len(self.tapped) == len(
-            self.people
-        ):
+        if len(self.tapped) == len(self.people):
 
             self.status.text = ar(
-                "أحسنت! تعرفت على عائلتك"
+                "أحسنت! تعرفت على عائلتك ★"
             )
 
             App.get_running_app().award_star(
@@ -1957,7 +1294,7 @@ class FamilyScreen(BaseScreen):
 
 
 # ============================================================
-# COMMUNICATION
+# COMMUNICATION / AAC
 # ============================================================
 
 class CommunicationScreen(BaseScreen):
@@ -2026,7 +1363,6 @@ class CommunicationScreen(BaseScreen):
     ]
 
     def __init__(self, **kwargs):
-
         super().__init__(**kwargs)
 
         self.used = set()
@@ -2037,9 +1373,7 @@ class CommunicationScreen(BaseScreen):
             spacing=dp(8)
         )
 
-        self.add_widget(
-            self.root_layout
-        )
+        self.add_widget(self.root_layout)
 
     def on_enter(self, *args):
 
@@ -2048,20 +1382,18 @@ class CommunicationScreen(BaseScreen):
         self.root_layout.clear_widgets()
 
         self.root_layout.add_widget(
-            self.build_header(
-                "أريد / التواصل"
-            )
+            self.build_header("أريد / التواصل")
         )
 
-        self.root_layout.add_widget(
-            make_label(
-                "اضغط على الصورة لتقول ما تريد",
-                size=19,
-                color=NAVY,
-                size_hint_y=None,
-                height=dp(42)
-            )
+        intro = make_label(
+            "اضغط على الصورة لتقول ما تريد",
+            size=19,
+            color=NAVY,
+            size_hint_y=None,
+            height=dp(42)
         )
+
+        self.root_layout.add_widget(intro)
 
         scroll = ScrollView(
             do_scroll_x=False
@@ -2075,9 +1407,7 @@ class CommunicationScreen(BaseScreen):
         )
 
         grid.bind(
-            minimum_height=grid.setter(
-                "height"
-            )
+            minimum_height=grid.setter("height")
         )
 
         for index, (
@@ -2094,43 +1424,36 @@ class CommunicationScreen(BaseScreen):
                 height=dp(170)
             )
 
-            card.add_widget(
-                Image(
-                    source=image_path(
-                        filename
-                    ),
-                    allow_stretch=True,
-                    keep_ratio=True
-                )
+            image = Image(
+                source=image_path(filename),
+                allow_stretch=True,
+                keep_ratio=True
             )
 
-            card.add_widget(
-                make_label(
-                    text,
-                    size=16,
-                    color=TEXT,
-                    size_hint_y=None,
-                    height=dp(42)
-                )
+            card.add_widget(image)
+
+            label = make_label(
+                text,
+                size=16,
+                color=TEXT,
+                size_hint_y=None,
+                height=dp(42)
             )
+
+            card.add_widget(label)
 
             card.bind(
                 on_release=lambda instance,
                 i=index,
                 snd=audio:
-                self.communication_selected(
-                    i,
-                    snd
-                )
+                self.communication_selected(i, snd)
             )
 
             grid.add_widget(card)
 
         scroll.add_widget(grid)
 
-        self.root_layout.add_widget(
-            scroll
-        )
+        self.root_layout.add_widget(scroll)
 
         self.status = make_label(
             "0 / 12",
@@ -2140,9 +1463,7 @@ class CommunicationScreen(BaseScreen):
             height=dp(38)
         )
 
-        self.root_layout.add_widget(
-            self.status
-        )
+        self.root_layout.add_widget(self.status)
 
         self.refresh_stars()
 
@@ -2159,16 +1480,13 @@ class CommunicationScreen(BaseScreen):
         )
 
         self.status.text = ar(
-            f"{len(self.used)} / "
-            f"{len(self.cards)}"
+            f"{len(self.used)} / {len(self.cards)}"
         )
 
-        if len(self.used) == len(
-            self.cards
-        ):
+        if len(self.used) == len(self.cards):
 
             self.status.text = ar(
-                "أحسنت! تعلمت كلمات التواصل"
+                "أحسنت! تعلمت كلمات التواصل ★"
             )
 
             App.get_running_app().award_star(
@@ -2177,7 +1495,7 @@ class CommunicationScreen(BaseScreen):
 
 
 # ============================================================
-# FOCUS
+# FOCUS / ATTENTION
 # ============================================================
 
 class FocusScreen(BaseScreen):
@@ -2186,63 +1504,62 @@ class FocusScreen(BaseScreen):
         {
             "id": "ahmed",
             "image": "family_ahmed.png",
-            "icon": None,
+            "symbol": "",
             "audio": "focus_find_ahmed.wav",
             "name": "أحمد"
         },
         {
             "id": "dad",
             "image": "family_dad.png",
-            "icon": None,
+            "symbol": "",
             "audio": "focus_find_dad.wav",
             "name": "أبي"
         },
         {
             "id": "mohamed",
             "image": "family_mohamed.png",
-            "icon": None,
+            "symbol": "",
             "audio": "focus_find_mohamed.wav",
             "name": "محمد"
         },
         {
             "id": "milad",
             "image": "family_milad.png",
-            "icon": None,
+            "symbol": "",
             "audio": "focus_find_milad.wav",
             "name": "ميلاد"
         },
         {
             "id": "apple",
             "image": None,
-            "icon": "apple",
+            "symbol": "★",
             "audio": "focus_find_apple.wav",
             "name": "التفاحة"
         },
         {
             "id": "car",
             "image": None,
-            "icon": "car",
+            "symbol": "▲",
             "audio": "focus_find_car.wav",
             "name": "السيارة"
         },
         {
             "id": "cat",
             "image": None,
-            "icon": "cat",
+            "symbol": "●",
             "audio": "focus_find_cat.wav",
             "name": "القطة"
         },
         {
             "id": "dog",
             "image": None,
-            "icon": "dog",
+            "symbol": "■",
             "audio": "focus_find_dog.wav",
             "name": "الكلب"
         },
     ]
 
     def __init__(self, **kwargs):
-
         super().__init__(**kwargs)
 
         self.score = 0
@@ -2256,9 +1573,7 @@ class FocusScreen(BaseScreen):
             spacing=dp(7)
         )
 
-        self.add_widget(
-            self.root_layout
-        )
+        self.add_widget(self.root_layout)
 
     def on_enter(self, *args):
 
@@ -2273,14 +1588,16 @@ class FocusScreen(BaseScreen):
             )
         )
 
+        instruction = make_label(
+            "انظر جيدًا واختر الصحيح",
+            size=20,
+            color=NAVY,
+            size_hint_y=None,
+            height=dp(42)
+        )
+
         self.root_layout.add_widget(
-            make_label(
-                "انظر جيدًا واختر الصحيح",
-                size=20,
-                color=NAVY,
-                size_hint_y=None,
-                height=dp(42)
-            )
+            instruction
         )
 
         self.question = make_label(
@@ -2327,16 +1644,14 @@ class FocusScreen(BaseScreen):
         )
 
         others = [
-            item
-            for item in self.targets
-            if item["id"] !=
-            self.current_target["id"]
+            item for item in self.targets
+            if item["id"] != self.current_target["id"]
         ]
 
-        self.options = (
-            random.sample(others, 2)
-            + [self.current_target]
-        )
+        self.options = random.sample(
+            others,
+            2
+        ) + [self.current_target]
 
         random.shuffle(self.options)
 
@@ -2352,63 +1667,58 @@ class FocusScreen(BaseScreen):
 
             if item["image"]:
 
-                card.add_widget(
-                    Image(
-                        source=image_path(
-                            item["image"]
-                        ),
-                        allow_stretch=True,
-                        keep_ratio=True
-                    )
+                image = Image(
+                    source=image_path(
+                        item["image"]
+                    ),
+                    allow_stretch=True,
+                    keep_ratio=True
                 )
+
+                card.add_widget(image)
 
             else:
 
-                card.add_widget(
-                    ObjectIcon(
-                        kind=item["icon"]
-                    )
+                symbol = make_label(
+                    item["symbol"],
+                    size=52,
+                    color=NAVY
                 )
 
-            card.add_widget(
-                make_label(
-                    item["name"],
-                    size=14,
-                    color=MUTED,
-                    size_hint_y=None,
-                    height=dp(32)
-                )
+                card.add_widget(symbol)
+
+            name_label = make_label(
+                item["name"],
+                size=14,
+                color=MUTED,
+                size_hint_y=None,
+                height=dp(32)
             )
+
+            card.add_widget(name_label)
 
             card.bind(
                 on_release=lambda instance,
                 selected=item:
-                self.check_answer(
-                    selected
-                )
+                self.check_answer(selected)
             )
 
-            self.options_grid.add_widget(
-                card
-            )
+            self.options_grid.add_widget(card)
 
         Clock.schedule_once(
-            lambda dt:
-            self.ask_question(),
+            lambda dt: self.ask_question(),
             0.3
         )
 
     def ask_question(self):
 
-        app = App.get_running_app()
-
-        app.play_audio(
+        App.get_running_app().play_audio(
             "focus_look.wav"
         )
 
         Clock.schedule_once(
             lambda dt:
-            app.play_audio(
+            App.get_running_app().play_audio(
                 self.current_target["audio"]
             ),
             0.8
@@ -2420,16 +1730,15 @@ class FocusScreen(BaseScreen):
 
     def check_answer(self, selected):
 
-        app = App.get_running_app()
+        if self.current_target is None:
+            return
 
-        if selected["id"] == (
-            self.current_target["id"]
-        ):
+        if selected["id"] == self.current_target["id"]:
 
             self.score += 1
             self.rounds += 1
 
-            app.play_audio(
+            App.get_running_app().play_audio(
                 "cheer.wav"
             )
 
@@ -2439,7 +1748,9 @@ class FocusScreen(BaseScreen):
 
             if self.score >= 5:
 
-                app.award_star("focus")
+                App.get_running_app().award_star(
+                    "focus"
+                )
 
                 Clock.schedule_once(
                     lambda dt:
@@ -2457,15 +1768,13 @@ class FocusScreen(BaseScreen):
 
         else:
 
-            app.play_audio(
+            App.get_running_app().play_audio(
                 "focus_try_again.wav"
             )
 
     def finish_focus(self):
 
-        app = App.get_running_app()
-
-        app.play_audio(
+        App.get_running_app().play_audio(
             "reward_complete.wav"
         )
 
@@ -2474,7 +1783,7 @@ class FocusScreen(BaseScreen):
         )
 
         self.score_label.text = ar(
-            "النشاط مكتمل"
+            "النشاط مكتمل ★"
         )
 
 
@@ -2518,7 +1827,6 @@ class ShapesScreen(BaseScreen):
     ]
 
     def __init__(self, **kwargs):
-
         super().__init__(**kwargs)
 
         self.correct = 0
@@ -2530,9 +1838,7 @@ class ShapesScreen(BaseScreen):
             spacing=dp(7)
         )
 
-        self.add_widget(
-            self.root_layout
-        )
+        self.add_widget(self.root_layout)
 
     def on_enter(self, *args):
 
@@ -2607,12 +1913,10 @@ class ShapesScreen(BaseScreen):
 
         shape_name = self.target[0]
 
-        self.target_shape.shape = (
-            shape_name
-        )
-
+        self.target_shape.shape = shape_name
         self.target_shape.shape_color = BLUE
 
+        # Refresh drawing
         self.target_shape.draw_shape()
 
         self.grid.clear_widgets()
@@ -2621,11 +1925,7 @@ class ShapesScreen(BaseScreen):
 
         random.shuffle(options)
 
-        for (
-            shape_type,
-            name,
-            audio
-        ) in options:
+        for shape_type, name, audio in options:
 
             card = RoundedCard(
                 card_color=WHITE,
@@ -2633,22 +1933,22 @@ class ShapesScreen(BaseScreen):
                 height=dp(145)
             )
 
-            card.add_widget(
-                ShapeWidget(
-                    shape=shape_type,
-                    shape_color=GOLD
-                )
+            shape = ShapeWidget(
+                shape=shape_type,
+                shape_color=GOLD
             )
 
-            card.add_widget(
-                make_label(
-                    name,
-                    size=15,
-                    color=TEXT,
-                    size_hint_y=None,
-                    height=dp(30)
-                )
+            card.add_widget(shape)
+
+            label = make_label(
+                name,
+                size=15,
+                color=TEXT,
+                size_hint_y=None,
+                height=dp(30)
             )
+
+            card.add_widget(label)
 
             card.bind(
                 on_release=lambda instance,
@@ -2660,9 +1960,7 @@ class ShapesScreen(BaseScreen):
                 )
             )
 
-            self.grid.add_widget(
-                card
-            )
+            self.grid.add_widget(card)
 
         App.get_running_app().play_audio(
             "find_shape.wav"
@@ -2674,19 +1972,20 @@ class ShapesScreen(BaseScreen):
         audio
     ):
 
-        app = App.get_running_app()
+        if self.target is None:
+            return
 
-        app.play_audio(audio)
+        App.get_running_app().play_audio(
+            audio
+        )
 
-        if selected_shape == (
-            self.target[0]
-        ):
+        if selected_shape == self.target[0]:
 
             self.correct += 1
 
             Clock.schedule_once(
                 lambda dt:
-                app.play_audio(
+                App.get_running_app().play_audio(
                     "cheer.wav"
                 ),
                 0.5
@@ -2716,7 +2015,7 @@ class ShapesScreen(BaseScreen):
 
             Clock.schedule_once(
                 lambda dt:
-                app.play_audio(
+                App.get_running_app().play_audio(
                     "focus_try_again.wav"
                 ),
                 0.5
@@ -2724,16 +2023,16 @@ class ShapesScreen(BaseScreen):
 
     def complete_shapes(self):
 
-        app = App.get_running_app()
+        App.get_running_app().award_star(
+            "shapes"
+        )
 
-        app.award_star("shapes")
-
-        app.play_audio(
+        App.get_running_app().play_audio(
             "reward_complete.wav"
         )
 
         self.question.text = ar(
-            "أحسنت! تعرفت على الأشكال"
+            "أحسنت! تعرفت على الأشكال ★"
         )
 
         self.score_label.text = ar(
@@ -2742,7 +2041,7 @@ class ShapesScreen(BaseScreen):
 
 
 # ============================================================
-# REWARDS
+# REWARDS / PROGRESS
 # ============================================================
 
 class RewardsScreen(BaseScreen):
@@ -2758,7 +2057,6 @@ class RewardsScreen(BaseScreen):
     ]
 
     def __init__(self, **kwargs):
-
         super().__init__(**kwargs)
 
         self.root_layout = BoxLayout(
@@ -2767,9 +2065,7 @@ class RewardsScreen(BaseScreen):
             spacing=dp(8)
         )
 
-        self.add_widget(
-            self.root_layout
-        )
+        self.add_widget(self.root_layout)
 
     def on_enter(self, *args):
 
@@ -2789,45 +2085,37 @@ class RewardsScreen(BaseScreen):
             height=dp(160)
         )
 
-        star_box.add_widget(
-            make_label(
-                "★",
-                size=75,
-                color=GOLD,
-                size_hint_y=None,
-                height=dp(90)
-            )
+        star = make_label(
+            "★",
+            size=75,
+            color=GOLD,
+            size_hint_y=None,
+            height=dp(90)
         )
 
-        star_box.add_widget(
-            make_label(
-                f"{app.stars} نجوم",
-                size=25,
-                color=NAVY,
-                size_hint_y=None,
-                height=dp(55)
-            )
+        star_box.add_widget(star)
+
+        total = make_label(
+            f"{app.stars} نجوم",
+            size=25,
+            color=NAVY,
+            size_hint_y=None,
+            height=dp(55)
         )
+
+        star_box.add_widget(total)
 
         self.root_layout.add_widget(
             star_box
         )
 
-        if app.stars >= len(
-            self.sections
-        ):
+        if app.stars >= len(self.sections):
 
-            message = (
-                "أحسنت يا أحمد! "
-                "أكملت جميع الأنشطة!"
-            )
+            message = "أحسنت يا أحمد! أكملت جميع الأنشطة!"
 
         else:
 
-            message = (
-                "استمر يا أحمد! "
-                "اجمع المزيد من النجوم."
-            )
+            message = "استمر يا أحمد! اجمع المزيد من النجوم."
 
         self.root_layout.add_widget(
             make_label(
@@ -2851,67 +2139,52 @@ class RewardsScreen(BaseScreen):
         )
 
         grid.bind(
-            minimum_height=grid.setter(
-                "height"
-            )
+            minimum_height=grid.setter("height")
         )
 
-        for title, section_id in (
-            self.sections
-        ):
+        for title, section_id in self.sections:
 
-            completed = (
-                section_id in app.completed
-            )
+            completed = section_id in app.completed
 
             card = RoundedCard(
                 orientation="horizontal",
                 card_color=(
-                    (0.91, 0.98, 0.93, 1)
-                    if completed
-                    else WHITE
-                ),
+                    0.91,
+                    0.98,
+                    0.93,
+                    1
+                ) if completed else WHITE,
                 size_hint_y=None,
                 height=dp(65)
             )
 
-            card.add_widget(
-                make_label(
-                    "★" if completed else "•",
-                    size=28,
-                    color=(
-                        GOLD
-                        if completed
-                        else MUTED
-                    ),
-                    size_hint_x=None,
-                    width=dp(55)
-                )
+            icon = make_label(
+                "★" if completed else "○",
+                size=28,
+                color=GOLD if completed else MUTED,
+                size_hint_x=None,
+                width=dp(55)
             )
 
-            card.add_widget(
-                make_label(
-                    title,
-                    size=18,
-                    color=TEXT
-                )
+            card.add_widget(icon)
+
+            title_label = make_label(
+                title,
+                size=18,
+                color=TEXT
             )
 
-            card.add_widget(
-                make_label(
-                    "مكتمل"
-                    if completed
-                    else "لم يكتمل",
-                    size=15,
-                    color=(
-                        GREEN
-                        if completed
-                        else MUTED
-                    ),
-                    size_hint_x=None,
-                    width=dp(80)
-                )
+            card.add_widget(title_label)
+
+            status = make_label(
+                "مكتمل" if completed else "لم يكتمل",
+                size=15,
+                color=GREEN if completed else MUTED,
+                size_hint_x=None,
+                width=dp(80)
             )
+
+            card.add_widget(status)
 
             grid.add_widget(card)
 
@@ -2925,7 +2198,7 @@ class RewardsScreen(BaseScreen):
 
 
 # ============================================================
-# APP
+# MAIN APP
 # ============================================================
 
 class AhmedWorldApp(App):
@@ -2935,6 +2208,10 @@ class AhmedWorldApp(App):
     def build(self):
 
         Window.clearcolor = BG_COLOR
+
+        # ----------------------------------------------------
+        # Persistent progress
+        # ----------------------------------------------------
 
         self.progress_file = os.path.join(
             self.user_data_dir,
@@ -2950,8 +2227,16 @@ class AhmedWorldApp(App):
 
         self.load_progress()
 
+        # ----------------------------------------------------
+        # Audio cache
+        # ----------------------------------------------------
+
         self.sound_cache = {}
         self.current_sound = None
+
+        # ----------------------------------------------------
+        # Screen manager
+        # ----------------------------------------------------
 
         manager = ScreenManager(
             transition=SlideTransition(
@@ -3021,6 +2306,7 @@ class AhmedWorldApp(App):
 
         manager.current = "splash"
 
+        # Android / hardware back
         Window.bind(
             on_keyboard=self.on_keyboard
         )
@@ -3028,16 +2314,14 @@ class AhmedWorldApp(App):
         return manager
 
     # --------------------------------------------------------
-    # PROGRESS
+    # Progress
     # --------------------------------------------------------
 
     def load_progress(self):
 
         try:
 
-            if self.store.exists(
-                "progress"
-            ):
+            if self.store.exists("progress"):
 
                 data = self.store.get(
                     "progress"
@@ -3048,10 +2332,7 @@ class AhmedWorldApp(App):
                 )
 
                 self.completed = set(
-                    data.get(
-                        "completed",
-                        []
-                    )
+                    data.get("completed", [])
                 )
 
         except Exception:
@@ -3095,7 +2376,7 @@ class AhmedWorldApp(App):
         return False
 
     # --------------------------------------------------------
-    # AUDIO
+    # Audio
     # --------------------------------------------------------
 
     def play_audio(self, filename):
@@ -3120,9 +2401,7 @@ class AhmedWorldApp(App):
                 if sound:
                     self.sound_cache[path] = sound
 
-            sound = self.sound_cache.get(
-                path
-            )
+            sound = self.sound_cache.get(path)
 
             if sound:
 
@@ -3135,7 +2414,7 @@ class AhmedWorldApp(App):
             pass
 
     # --------------------------------------------------------
-    # BACK BUTTON
+    # Hardware back button
     # --------------------------------------------------------
 
     def on_keyboard(
@@ -3151,9 +2430,7 @@ class AhmedWorldApp(App):
 
             if self.root:
 
-                current = (
-                    self.root.current
-                )
+                current = self.root.current
 
                 if current != "main_menu":
 
