@@ -9,7 +9,7 @@ source.dir = .
 source.include_exts = py,png,jpg,jpeg,kv,atlas,wav,mp3,ttf
 source.exclude_dirs = tests,bin,venv,.buildozer,.git,__pycache__
 
-version = 2.0
+version = 2.1
 
 icon.filename = %(source.dir)s/app_icon.png
 
