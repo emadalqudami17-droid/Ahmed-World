@@ -8,7 +8,7 @@ from kivy.clock import Clock
 from kivy.core.audio import SoundLoader
 from kivy.core.text import LabelBase
 from kivy.core.window import Window
-from kivy.graphics import Color, RoundedRectangle
+from kivy.graphics import Color, RoundedRectangle, Rectangle
 from kivy.metrics import dp
 from kivy.storage.jsonstore import JsonStore
 from kivy.uix.behaviors import ButtonBehavior
@@ -30,6 +30,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def _find_font():
     candidates = [
+        os.path.join(BASE_DIR, "Cairo-Regular.ttf"),
         os.path.join(BASE_DIR, "NotoNaskhArabic-Regular.ttf"),
         "NotoNaskhArabic-Regular.ttf",
         os.path.join(os.getcwd(), "NotoNaskhArabic-Regular.ttf"),
@@ -58,7 +59,7 @@ except Exception:
 
 
 # ============================================================
-# ARABIC RESHAPING (بدون python-bidi)
+# ARABIC RESHAPING
 # ============================================================
 
 try:
@@ -69,45 +70,39 @@ except Exception:
 
 
 def _reverse_arabic(text):
-    """عكس النص العربي يدوياً مع الحفاظ على ترتيب الأرقام."""
+    """عكس النص العربي كلمة بكلمة."""
     if not text:
         return text
 
     lines = text.split("\n")
-    reversed_lines = []
+    result_lines = []
 
     for line in lines:
-        segments = []
-        current = ""
-        current_is_digit = None
+        if not line.strip():
+            result_lines.append(line)
+            continue
 
-        for ch in line:
-            is_digit = ch.isdigit() or ch in ".,،:/-"
-            if current_is_digit is None or is_digit == current_is_digit:
-                current += ch
-                current_is_digit = is_digit
+        words = line.split(" ")
+        words.reverse()
+
+        reversed_words = []
+        for word in words:
+            if not word:
+                reversed_words.append("")
+                continue
+
+            first_char = word[0]
+            if first_char.isdigit() or first_char in "0123456789+-*/=.,:;()[]":
+                reversed_words.append(word)
             else:
-                segments.append((current_is_digit, current))
-                current = ch
-                current_is_digit = is_digit
+                reversed_words.append(word[::-1])
 
-        if current:
-            segments.append((current_is_digit, current))
+        result_lines.append(" ".join(reversed_words))
 
-        reversed_segments = []
-        for is_digit, seg in reversed(segments):
-            if is_digit:
-                reversed_segments.append(seg)
-            else:
-                reversed_segments.append(seg[::-1])
-
-        reversed_lines.append("".join(reversed_segments))
-
-    return "\n".join(reversed_lines)
+    return "\n".join(result_lines)
 
 
 def ar(text):
-    """تشكيل + عكس النص العربي."""
     if not text:
         return text
 
@@ -153,7 +148,7 @@ def audio_path(filename):
 
 
 # ============================================================
-# COLORS / THEME
+# COLORS
 # ============================================================
 
 BG_COLOR = (0.965, 0.975, 0.995, 1)
@@ -180,7 +175,7 @@ CARD_COLORS = [
 
 
 # ============================================================
-# BASIC HELPERS
+# HELPERS
 # ============================================================
 
 def make_label(text="", size=20, color=TEXT, **kwargs):
@@ -198,7 +193,7 @@ def make_label(text="", size=20, color=TEXT, **kwargs):
 
 
 # ============================================================
-# ICON BUTTON (Image as Button)
+# ICON BUTTON
 # ============================================================
 
 class IconButton(ButtonBehavior, Image):
@@ -221,7 +216,7 @@ class IconButton(ButtonBehavior, Image):
 
 
 # ============================================================
-# ROUNDED BUTTON (text)
+# ROUND BUTTON
 # ============================================================
 
 class RoundButton(ButtonBehavior, Label):
@@ -272,7 +267,7 @@ class RoundButton(ButtonBehavior, Label):
 
 
 # ============================================================
-# ROUNDED CARD
+# ROUND CARD
 # ============================================================
 
 class RoundedCard(ButtonBehavior, BoxLayout):
@@ -332,24 +327,16 @@ class BaseScreen(Screen):
     def on_pre_enter(self, *args):
         Window.clearcolor = BG_COLOR
 
-    def build_header(self, title, show_back=True):
-
+    def build_header(self, title, show_back=False):
         header = BoxLayout(
             orientation="horizontal",
             size_hint_y=None,
             height=dp(65),
             spacing=dp(8),
-            padding=(dp(8), dp(8))
+            padding=(dp(15), dp(8))
         )
 
-        if show_back:
-            back = IconButton("icon_back.png", width=50)
-            back.bind(on_release=lambda *_: self.go_main())
-            header.add_widget(back)
-        else:
-            header.add_widget(
-                Widget(size_hint_x=None, width=dp(50))
-            )
+        header.add_widget(Widget(size_hint_x=None, width=dp(80)))
 
         title_label = make_label(title, size=23, color=NAVY)
         header.add_widget(title_label)
@@ -384,6 +371,30 @@ class BaseScreen(Screen):
 
         return header
 
+    def build_footer_buttons(self):
+        footer = BoxLayout(
+            orientation="horizontal",
+            size_hint_y=None,
+            height=dp(62),
+            spacing=dp(10),
+            padding=(dp(10), dp(6))
+        )
+
+        back_button = IconButton("icon_back.png", width=52)
+        back_button.bind(on_release=lambda *_: self.go_main())
+        footer.add_widget(back_button)
+
+        footer.add_widget(Widget())
+
+        exit_button = IconButton("icon_exit.png", width=52)
+        exit_button.bind(on_release=lambda *_: self.exit_app())
+        footer.add_widget(exit_button)
+
+        return footer
+
+    def exit_app(self):
+        App.get_running_app().stop()
+
     def refresh_stars(self):
         if hasattr(self, "star_header"):
             app = App.get_running_app()
@@ -397,13 +408,19 @@ class BaseScreen(Screen):
 
 
 # ============================================================
-# SPLASH SCREEN (صورة أحمد لمدة 7 ثوانٍ)
+# SPLASH SCREEN
 # ============================================================
 
 class SplashScreen(BaseScreen):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+        with self.canvas.before:
+            Color(*BG_COLOR)
+            self.bg_rect = Rectangle(pos=self.pos, size=self.size)
+
+        self.bind(pos=self._update_bg, size=self._update_bg)
 
         layout = BoxLayout(
             orientation="vertical",
@@ -414,34 +431,30 @@ class SplashScreen(BaseScreen):
         layout.add_widget(Widget(size_hint_y=0.05))
 
         ahmed_image = Image(
-            source=image_path("family_ahmed.png"),
+            source=asset("app_icon.png"),
             allow_stretch=True,
             keep_ratio=True,
             size_hint_y=0.55
         )
         layout.add_widget(ahmed_image)
 
-        title = make_label(
-            "عالم أحمد",
-            size=38,
-            color=NAVY,
-            size_hint_y=None,
-            height=dp(70)
-        )
-        layout.add_widget(title)
+        layout.add_widget(make_label(
+            "عالم أحمد", size=38, color=NAVY,
+            size_hint_y=None, height=dp(70)
+        ))
 
-        greeting = make_label(
-            "أهلاً أحمد!",
-            size=28,
-            color=GOLD,
-            size_hint_y=None,
-            height=dp(60)
-        )
-        layout.add_widget(greeting)
+        layout.add_widget(make_label(
+            "أهلاً أحمد!", size=28, color=GOLD,
+            size_hint_y=None, height=dp(60)
+        ))
 
         layout.add_widget(Widget(size_hint_y=0.10))
 
         self.add_widget(layout)
+
+    def _update_bg(self, *args):
+        self.bg_rect.pos = self.pos
+        self.bg_rect.size = self.size
 
     def on_enter(self, *args):
         Clock.schedule_once(self.open_main, 7.0)
@@ -481,7 +494,7 @@ class MainMenuScreen(BaseScreen):
 
         self.root_layout.clear_widgets()
 
-        # ---------- Header ----------
+        # Header
         header = BoxLayout(
             orientation="horizontal",
             size_hint_y=None,
@@ -526,7 +539,7 @@ class MainMenuScreen(BaseScreen):
 
         self.root_layout.add_widget(header)
 
-        # ---------- Grid ----------
+        # Grid
         scroll = ScrollView(do_scroll_x=False)
         grid = GridLayout(
             cols=2, spacing=dp(12), padding=dp(8), size_hint_y=None
@@ -590,10 +603,38 @@ class MainMenuScreen(BaseScreen):
         scroll.add_widget(grid)
         self.root_layout.add_widget(scroll)
 
+        # Footer: text
         self.root_layout.add_widget(make_label(
             "اختر نشاطًا لنبدأ!", size=17, color=MUTED,
-            size_hint_y=None, height=dp(42)
+            size_hint_y=None, height=dp(36)
         ))
+
+        # Exit row
+        exit_row = BoxLayout(
+            orientation="horizontal",
+            size_hint_y=None,
+            height=dp(50),
+            spacing=dp(8),
+            padding=(dp(8), dp(4))
+        )
+
+        exit_row.add_widget(Widget())
+
+        exit_icon = IconButton("icon_exit.png", width=42)
+        exit_icon.bind(on_release=lambda *_: self.exit_app())
+        exit_row.add_widget(exit_icon)
+
+        exit_row.add_widget(make_label(
+            "خروج", size=16, color=RED,
+            size_hint_x=None, width=dp(60)
+        ))
+
+        exit_row.add_widget(Widget())
+
+        self.root_layout.add_widget(exit_row)
+
+    def exit_app(self):
+        App.get_running_app().stop()
 
     def open_section(self, name):
         if self.manager:
@@ -602,7 +643,7 @@ class MainMenuScreen(BaseScreen):
 
 
 # ============================================================
-# GENERIC STEP SCREEN
+# STEP SCREEN
 # ============================================================
 
 class StepScreen(BaseScreen):
@@ -678,6 +719,9 @@ class StepScreen(BaseScreen):
         buttons.add_widget(self.previous_button)
         buttons.add_widget(self.next_button)
         self.main_layout.add_widget(buttons)
+
+        # Footer with back + exit
+        self.main_layout.add_widget(self.build_footer_buttons())
 
         self.update_step()
 
@@ -900,6 +944,8 @@ class FamilyScreen(BaseScreen):
         )
         self.root_layout.add_widget(self.status)
 
+        self.root_layout.add_widget(self.build_footer_buttons())
+
         self.refresh_stars()
 
     def person_selected(self, index, audio):
@@ -911,16 +957,12 @@ class FamilyScreen(BaseScreen):
 
 
 # ============================================================
-# COMMUNICATION / AAC (10 بطاقات)
+# COMMUNICATION (6 بطاقات، 2 أعمدة)
 # ============================================================
 
 class CommunicationScreen(BaseScreen):
 
     cards = [
-        ("family_ahmed.png", "أحمد", "say_ahmed.wav"),
-        ("family_dad.png", "أبي", "say_dad.wav"),
-        ("family_mohamed.png", "محمد", "say_mohamed.wav"),
-        ("family_milad.png", "ميلاد", "say_milad.wav"),
         ("aac_water.png", "ماء", "say_water.wav"),
         ("aac_food.png", "طعام", "say_food.wav"),
         ("aac_toilet.png", "حمام", "say_toilet.wav"),
@@ -952,7 +994,10 @@ class CommunicationScreen(BaseScreen):
 
         scroll = ScrollView(do_scroll_x=False)
         grid = GridLayout(
-            cols=3, spacing=dp(10), padding=dp(6), size_hint_y=None
+            cols=2,
+            spacing=dp(12),
+            padding=dp(8),
+            size_hint_y=None
         )
         grid.bind(minimum_height=grid.setter("height"))
 
@@ -961,7 +1006,7 @@ class CommunicationScreen(BaseScreen):
             card = RoundedCard(
                 card_color=CARD_COLORS[index % len(CARD_COLORS)],
                 size_hint_y=None,
-                height=dp(170)
+                height=dp(200)
             )
 
             card.add_widget(Image(
@@ -971,8 +1016,8 @@ class CommunicationScreen(BaseScreen):
             ))
 
             card.add_widget(make_label(
-                text, size=15, color=TEXT,
-                size_hint_y=None, height=dp(42)
+                text, size=18, color=TEXT,
+                size_hint_y=None, height=dp(48)
             ))
 
             card.bind(
@@ -991,21 +1036,21 @@ class CommunicationScreen(BaseScreen):
         )
         self.root_layout.add_widget(self.status)
 
+        self.root_layout.add_widget(self.build_footer_buttons())
+
         self.refresh_stars()
 
     def communication_selected(self, index, audio):
-
         self.used.add(index)
         App.get_running_app().play_audio(audio)
         self.status.text = ar(f"{len(self.used)} / {len(self.cards)}")
-
         if len(self.used) == len(self.cards):
             self.status.text = ar("أحسنت! تعلمت كلمات التواصل")
             App.get_running_app().award_star("communication")
 
 
 # ============================================================
-# FOCUS / ATTENTION
+# FOCUS
 # ============================================================
 
 class FocusScreen(BaseScreen):
@@ -1042,7 +1087,6 @@ class FocusScreen(BaseScreen):
         self.add_widget(self.root_layout)
 
     def on_enter(self, *args):
-
         self.score = 0
         self.rounds = 0
         self.root_layout.clear_widgets()
@@ -1071,10 +1115,11 @@ class FocusScreen(BaseScreen):
         )
         self.root_layout.add_widget(self.score_label)
 
+        self.root_layout.add_widget(self.build_footer_buttons())
+
         self.new_round()
 
     def new_round(self):
-
         self.current_target = random.choice(self.targets)
         others = [t for t in self.targets if t["id"] != self.current_target["id"]]
         self.options = random.sample(others, 2) + [self.current_target]
@@ -1083,24 +1128,20 @@ class FocusScreen(BaseScreen):
         self.options_grid.clear_widgets()
 
         for item in self.options:
-
             card = RoundedCard(
                 card_color=LIGHT_BLUE,
                 size_hint_y=None,
                 height=dp(180)
             )
-
             card.add_widget(Image(
                 source=image_path(item["image"]),
                 allow_stretch=True,
                 keep_ratio=True
             ))
-
             card.add_widget(make_label(
                 item["name"], size=14, color=MUTED,
                 size_hint_y=None, height=dp(32)
             ))
-
             card.bind(
                 on_release=lambda instance, selected=item:
                 self.check_answer(selected)
@@ -1120,17 +1161,13 @@ class FocusScreen(BaseScreen):
         self.question.text = ar("أين هو؟")
 
     def check_answer(self, selected):
-
         if self.current_target is None:
             return
-
         if selected["id"] == self.current_target["id"]:
-
             self.score += 1
             self.rounds += 1
             App.get_running_app().play_audio("cheer.wav")
             self.score_label.text = ar(f"{self.score} / 5")
-
             if self.score >= 5:
                 App.get_running_app().award_star("focus")
                 Clock.schedule_once(lambda dt: self.finish_focus(), 0.7)
@@ -1146,7 +1183,7 @@ class FocusScreen(BaseScreen):
 
 
 # ============================================================
-# SHAPES (صور بدل الرسم البرمجي)
+# SHAPES
 # ============================================================
 
 class ShapesScreen(BaseScreen):
@@ -1171,7 +1208,6 @@ class ShapesScreen(BaseScreen):
         self.add_widget(self.root_layout)
 
     def on_enter(self, *args):
-
         self.correct = 0
         self.root_layout.clear_widgets()
         self.root_layout.add_widget(self.build_header("الأشكال"))
@@ -1210,10 +1246,11 @@ class ShapesScreen(BaseScreen):
         )
         self.root_layout.add_widget(self.score_label)
 
+        self.root_layout.add_widget(self.build_footer_buttons())
+
         self.new_question()
 
     def new_question(self):
-
         self.target = random.choice(self.shapes)
         shape_name = self.target[0]
 
@@ -1227,24 +1264,20 @@ class ShapesScreen(BaseScreen):
         random.shuffle(options)
 
         for shape_type, name, audio in options:
-
             card = RoundedCard(
                 card_color=WHITE,
                 size_hint_y=None,
                 height=dp(145)
             )
-
             card.add_widget(Image(
                 source=image_path(f"shape_{shape_type}_gold.png"),
                 allow_stretch=True,
                 keep_ratio=True,
             ))
-
             card.add_widget(make_label(
                 name, size=14, color=TEXT,
                 size_hint_y=None, height=dp(30)
             ))
-
             card.bind(
                 on_release=lambda instance, st=shape_type, snd=audio:
                 self.check_shape(st, snd)
@@ -1254,21 +1287,16 @@ class ShapesScreen(BaseScreen):
         App.get_running_app().play_audio("find_shape.wav")
 
     def check_shape(self, selected_shape, audio):
-
         if self.target is None:
             return
-
         App.get_running_app().play_audio(audio)
-
         if selected_shape == self.target[0]:
-
             self.correct += 1
             Clock.schedule_once(
                 lambda dt: App.get_running_app().play_audio("cheer.wav"),
                 0.5
             )
             self.score_label.text = ar(f"{self.correct} / 5")
-
             if self.correct >= 5:
                 Clock.schedule_once(lambda dt: self.complete_shapes(), 0.9)
             else:
@@ -1289,7 +1317,7 @@ class ShapesScreen(BaseScreen):
 
 
 # ============================================================
-# REWARDS / PROGRESS
+# REWARDS
 # ============================================================
 
 class RewardsScreen(BaseScreen):
@@ -1313,7 +1341,6 @@ class RewardsScreen(BaseScreen):
         self.add_widget(self.root_layout)
 
     def on_enter(self, *args):
-
         self.root_layout.clear_widgets()
         self.root_layout.add_widget(self.build_header("المكافآت والتقدم"))
 
@@ -1357,16 +1384,13 @@ class RewardsScreen(BaseScreen):
         grid.bind(minimum_height=grid.setter("height"))
 
         for title, section_id in self.sections:
-
             completed = section_id in app.completed
-
             card = RoundedCard(
                 orientation="horizontal",
                 card_color=(0.91, 0.98, 0.93, 1) if completed else WHITE,
                 size_hint_y=None,
                 height=dp(65)
             )
-
             card.add_widget(Image(
                 source=image_path(
                     "star.png" if completed else "star_empty.png"
@@ -1376,11 +1400,7 @@ class RewardsScreen(BaseScreen):
                 size_hint_x=None,
                 width=dp(45),
             ))
-
-            card.add_widget(make_label(
-                title, size=18, color=TEXT
-            ))
-
+            card.add_widget(make_label(title, size=18, color=TEXT))
             card.add_widget(make_label(
                 "مكتمل" if completed else "لم يكتمل",
                 size=15,
@@ -1388,11 +1408,12 @@ class RewardsScreen(BaseScreen):
                 size_hint_x=None,
                 width=dp(80),
             ))
-
             grid.add_widget(card)
 
         scroll.add_widget(grid)
         self.root_layout.add_widget(scroll)
+
+        self.root_layout.add_widget(self.build_footer_buttons())
 
         self.refresh_stars()
 
@@ -1406,7 +1427,6 @@ class AhmedWorldApp(App):
     title = "Ahmed World"
 
     def build(self):
-
         Window.clearcolor = BG_COLOR
 
         self.progress_file = os.path.join(
@@ -1490,12 +1510,18 @@ class AhmedWorldApp(App):
             pass
 
     def on_keyboard(self, window, key, scancode, codepoint, modifier):
-        if key == 27:  # زر الرجوع في أندرويد
+        if key == 27:
             if self.root:
                 current = self.root.current
-                if current != "main_menu":
+                if current == "splash":
+                    return True  # منع الخروج من السبلاش
+                elif current != "main_menu":
                     self.root.transition = SlideTransition(direction="right")
                     self.root.current = "main_menu"
+                    return True
+                else:
+                    # في القائمة الرئيسية → اخرج من التطبيق
+                    App.get_running_app().stop()
                     return True
             return False
         return False
