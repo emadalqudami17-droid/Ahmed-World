@@ -13,7 +13,7 @@ version = 2.0
 
 icon.filename = %(source.dir)s/app_icon.png
 
-requirements = python3,kivy==2.1.0,plyer,arabic-reshaper,python-bidi,pyjnius,pillow
+requirements = python3,kivy==2.1.0,plyer,arabic-reshaper,pyjnius,pillow
 
 p4a.branch = v2024.01.21
 p4a.bootstrap = sdl2
