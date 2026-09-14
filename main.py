@@ -372,25 +372,22 @@ class BaseScreen(Screen):
         return header
 
     def build_footer_buttons(self):
-        footer = BoxLayout(
-            orientation="horizontal",
-            size_hint_y=None,
-            height=dp(62),
-            spacing=dp(10),
-            padding=(dp(10), dp(6))
-        )
+    """شريط سفلي: زر الرجوع فقط (زر الخروج في القائمة الرئيسية)"""
+    footer = BoxLayout(
+        orientation="horizontal",
+        size_hint_y=None,
+        height=dp(62),
+        spacing=dp(10),
+        padding=(dp(10), dp(6))
+    )
 
-        back_button = IconButton("icon_back.png", width=52)
-        back_button.bind(on_release=lambda *_: self.go_main())
-        footer.add_widget(back_button)
+    back_button = IconButton("icon_back.png", width=52)
+    back_button.bind(on_release=lambda *_: self.go_main())
+    footer.add_widget(back_button)
 
-        footer.add_widget(Widget())
+    footer.add_widget(Widget())
 
-        exit_button = IconButton("icon_exit.png", width=52)
-        exit_button.bind(on_release=lambda *_: self.exit_app())
-        footer.add_widget(exit_button)
-
-        return footer
+    return footer
 
     def exit_app(self):
         App.get_running_app().stop()
