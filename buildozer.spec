@@ -6,14 +6,14 @@ package.name = ahmedworld
 package.domain = org.ahmedapp
 
 source.dir = .
-source.include_exts = py,png,jpg,jpeg,kv,atlas,wav,mp3,ttf
+source.include_exts = py,png,jpg,jpeg,kv,atlas,wav,mp3,ttf,otf
 source.exclude_dirs = tests,bin,venv,.buildozer,.git,__pycache__
 
-version = 2.1
+version = 2.0
 
 icon.filename = %(source.dir)s/app_icon.png
 
-requirements = python3,kivy==2.1.0,plyer,arabic-reshaper,python-bidi,pyjnius
+requirements = python3,kivy==2.1.0,plyer,arabic-reshaper,python-bidi,pyjnius,pillow
 
 p4a.branch = v2024.01.21
 p4a.bootstrap = sdl2
