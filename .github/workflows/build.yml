@@ -2,7 +2,9 @@ name: Build Ahmed World APK
 
 on:
   workflow_dispatch:
-  
+  push:
+    branches:
+      - main
 
 jobs:
   build:
@@ -28,10 +30,23 @@ jobs:
           java -version
           echo "JAVA_HOME=$JAVA_HOME"
 
-      - name: Verify font file exists
+      - name: Verify required files
         run: |
+          echo "=== محتوى الجذر ==="
           ls -la
-          test -f NotoNaskhArabic-Regular.ttf && echo "Font found ✓" || echo "Font MISSING!"
+          echo ""
+          echo "=== التحقق من الملفات المهمة ==="
+          test -f main.py && echo "main.py ✓" || echo "main.py MISSING!"
+          test -f buildozer.spec && echo "buildozer.spec ✓" || echo "buildozer.spec MISSING!"
+          test -f app_icon.png && echo "app_icon.png ✓" || echo "app_icon.png MISSING!"
+          test -f NotoNaskhArabic-Regular.ttf && echo "NotoNaskhArabic-Regular.ttf ✓" || echo "NotoNaskhArabic-Regular.ttf MISSING!"
+          test -f Cairo-Regular.ttf && echo "Cairo-Regular.ttf ✓" || echo "Cairo-Regular.ttf not found (optional)"
+          echo ""
+          echo "=== مجلد الصور ==="
+          ls images/ | head -20
+          echo "..."
+          echo "إجمالي الصور:"
+          ls images/ | wc -l
 
       - name: Install system dependencies
         run: |
@@ -49,7 +64,10 @@ jobs:
             libncursesw5-dev \
             cmake \
             libffi-dev \
-            libssl-dev
+            libssl-dev \
+            libjpeg-dev \
+            libfreetype6-dev \
+            libpng-dev
 
       - name: Force Java 17
         run: |
@@ -71,9 +89,14 @@ jobs:
           java -version
           buildozer android debug
 
-      - name: Verify font in APK
+      - name: Verify font and images in APK
         run: |
-          unzip -l bin/*.apk | grep -i "ttf" || echo "WARNING: No font in APK!"
+          echo "=== التحقق من محتوى APK ==="
+          unzip -l bin/*.apk | grep -i "\.ttf" || echo "WARNING: No font in APK!"
+          echo ""
+          unzip -l bin/*.apk | grep -c "images/" || echo "No images in APK!"
+          echo ""
+          unzip -l bin/*.apk | tail -5
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
