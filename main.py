@@ -1580,6 +1580,38 @@ class RewardsScreen(BaseScreen):
 
 
 # ============================================================
+# LETTERS TRACE POINTS
+# ============================================================
+
+LETTERS_TRACE_POINTS = {
+    "alef": [
+        (0.50, 0.90),
+        (0.50, 0.75),
+        (0.50, 0.60),
+        (0.50, 0.45),
+        (0.50, 0.30),
+        (0.50, 0.15),
+    ],
+    "baa": [
+        (0.80, 0.55),
+        (0.65, 0.55),
+        (0.50, 0.55),
+        (0.38, 0.55),
+        (0.28, 0.50),
+        (0.25, 0.40),
+    ],
+    "taa": [
+        (0.80, 0.60),
+        (0.65, 0.60),
+        (0.50, 0.60),
+        (0.38, 0.60),
+        (0.28, 0.55),
+        (0.25, 0.45),
+    ],
+}
+
+
+# ============================================================
 # LETTERS DATA
 # ============================================================
 
@@ -1613,6 +1645,65 @@ LETTERS_DATA = [
     {"id": "waw",   "letter": "و",  "name": "واو",  "word": "وردة",  "enabled": False},
     {"id": "yaa",   "letter": "ي",  "name": "ياء",  "word": "يد",    "enabled": False},
 ]
+
+
+# ============================================================
+# TRACE POINT
+# ============================================================
+
+class TracePoint(Widget):
+    """نقطة على مسار الحرف تتلون عند لمسها."""
+
+    def __init__(self, index=0, **kwargs):
+        super().__init__(**kwargs)
+        self.index = index
+        self.visited = False
+        self.pulse = 0
+        self._time = 0
+
+        with self.canvas:
+            self.color_instr = Color(0.70, 0.75, 0.85, 1)
+            self.circle = Ellipse(pos=(0, 0), size=(dp(28), dp(28)))
+
+        self.bind(pos=self._update_circle, size=self._update_circle)
+
+        self._clock_event = Clock.schedule_interval(self._animate, 1/30.0)
+
+    def _update_circle(self, *args):
+        s = dp(28) + self.pulse
+        cx = self.x + self.width / 2
+        cy = self.y + self.height / 2
+        self.circle.pos = (cx - s/2, cy - s/2)
+        self.circle.size = (s, s)
+
+    def _animate(self, dt):
+        self._time += dt
+        if not self.visited:
+            self.pulse = 4 + 3 * math.sin(self._time * 5)
+        else:
+            self.pulse = 0
+        self._update_circle()
+
+    def mark_visited(self):
+        self.visited = True
+        self.pulse = 0
+        self.color_instr.rgba = (0.20, 0.80, 0.40, 1)
+        self._update_circle()
+
+    def set_current(self):
+        if not self.visited:
+            self.color_instr.rgba = (1.0, 0.75, 0.20, 1)
+
+    def reset(self):
+        self.visited = False
+        self.pulse = 0
+        self.color_instr.rgba = (0.70, 0.75, 0.85, 1)
+        self._update_circle()
+
+    def stop(self):
+        if self._clock_event:
+            self._clock_event.cancel()
+            self._clock_event = None
 
 
 # ============================================================
@@ -1726,54 +1817,78 @@ class LettersListScreen(BaseScreen):
 
 
 # ============================================================
-# DRAWING AREA (يستخدم صور PNG)
+# DRAWING AREA
 # ============================================================
 
 class DrawingArea(Widget):
-    """منطقة لرسم الحرف مباشرة فوق صورته."""
 
-    def __init__(self, letter_id="alef", **kwargs):
+    def __init__(self, letter_id="alef", on_complete=None, **kwargs):
         super().__init__(**kwargs)
 
         self.letter_id = letter_id
+        self.on_complete = on_complete
         self._last_x = None
         self._last_y = None
+        self.trace_points = []
+        self.current_index = 0
+        self.completed = False
 
-        # صورة الحرف الباهت (مع نقطة البداية والسهم)
         self.letter_image = Image(
-            source=image_path(
-                f"letters/letter_{letter_id}_trace.png"
-            ),
+            source=image_path(f"letters/letter_{letter_id}_trace.png"),
             allow_stretch=True,
             keep_ratio=True,
             size_hint=(1, 1),
         )
         self.add_widget(self.letter_image)
 
-        self.bind(pos=self._update_children, size=self._update_children)
+        self._create_trace_points()
 
-        # الرسم فوق كل شيء
         with self.canvas.after:
             Color(*BLUE)
+
+        self.bind(pos=self._update_children, size=self._update_children)
+
+    def _create_trace_points(self):
+        points = LETTERS_TRACE_POINTS.get(self.letter_id, [])
+        for i in range(len(points)):
+            point = TracePoint(index=i)
+            self.trace_points.append(point)
+            self.add_widget(point)
+
+        if self.trace_points:
+            self.trace_points[0].set_current()
 
     def _update_children(self, *args):
         self.letter_image.pos = self.pos
         self.letter_image.size = self.size
 
+        points = LETTERS_TRACE_POINTS.get(self.letter_id, [])
+        for i, point in enumerate(self.trace_points):
+            if i < len(points):
+                nx, ny = points[i]
+                px = self.x + nx * self.width
+                py = self.y + ny * self.height
+                size = dp(30)
+                point.pos = (px - size/2, py - size/2)
+                point.size = (size, size)
+
     def on_touch_down(self, touch):
-        if self.collide_point(*touch.pos):
-            with self.canvas.after:
-                Color(*BLUE)
-                Line(
-                    points=[touch.x, touch.y, touch.x + 0.5, touch.y + 0.5],
-                    width=dp(18),
-                    cap="round",
-                    joint="round"
-                )
-            self._last_x = touch.x
-            self._last_y = touch.y
-            return True
-        return False
+        if not self.collide_point(*touch.pos):
+            return False
+
+        with self.canvas.after:
+            Color(*BLUE)
+            Line(
+                points=[touch.x, touch.y, touch.x + 0.5, touch.y + 0.5],
+                width=dp(18),
+                cap="round",
+                joint="round"
+            )
+        self._last_x = touch.x
+        self._last_y = touch.y
+
+        self._check_point_collision(touch.x, touch.y)
+        return True
 
     def on_touch_move(self, touch):
         if self.collide_point(*touch.pos) and self._last_x is not None:
@@ -1787,6 +1902,8 @@ class DrawingArea(Widget):
                 )
             self._last_x = touch.x
             self._last_y = touch.y
+
+            self._check_point_collision(touch.x, touch.y)
             return True
         return False
 
@@ -1795,10 +1912,59 @@ class DrawingArea(Widget):
         self._last_y = None
         return False
 
+    def _check_point_collision(self, x, y):
+        if self.completed or self.current_index >= len(self.trace_points):
+            return
+
+        touch_radius = dp(45)
+
+        current_point = self.trace_points[self.current_index]
+        cx = current_point.x + current_point.width / 2
+        cy = current_point.y + current_point.height / 2
+        dist_current = ((x - cx) ** 2 + (y - cy) ** 2) ** 0.5
+
+        if dist_current < touch_radius:
+            current_point.mark_visited()
+            self.current_index += 1
+
+            if self.current_index >= len(self.trace_points):
+                self.completed = True
+                if self.on_complete:
+                    self.on_complete()
+            else:
+                self.trace_points[self.current_index].set_current()
+            return
+
+        if self.current_index + 1 < len(self.trace_points):
+            next_point = self.trace_points[self.current_index + 1]
+            nx = next_point.x + next_point.width / 2
+            ny = next_point.y + next_point.height / 2
+            dist_next = ((x - nx) ** 2 + (y - ny) ** 2) ** 0.5
+
+            if dist_next < touch_radius:
+                current_point.mark_visited()
+                next_point.mark_visited()
+                self.current_index += 2
+
+                if self.current_index >= len(self.trace_points):
+                    self.completed = True
+                    if self.on_complete:
+                        self.on_complete()
+                else:
+                    self.trace_points[self.current_index].set_current()
+
     def clear(self):
         self.canvas.after.clear()
         with self.canvas.after:
             Color(*BLUE)
+
+        self.current_index = 0
+        self.completed = False
+        for point in self.trace_points:
+            point.reset()
+
+        if self.trace_points:
+            self.trace_points[0].set_current()
 
 
 # ============================================================
@@ -1886,24 +2052,18 @@ class LetterLessonScreen(BaseScreen):
             size_hint_y=None, height=dp(30)
         ))
 
-        # منطقة الرسم (تستخدم صورة الحرف + نقطة البداية)
         self.drawing_area = DrawingArea(
             letter_id=self.letter_data["id"],
+            on_complete=self.on_drawing_complete,
             size_hint_y=0.8,
         )
         self.root_layout.add_widget(self.drawing_area)
 
         self.root_layout.add_widget(make_label(
-            "اتبع النقطة الخضراء وارسم فوق الحرف",
+            "اتبع النقاط بإصبعك",
             size=15, color=MUTED,
             size_hint_y=None, height=dp(30)
         ))
-
-        buttons = BoxLayout(
-            size_hint_y=None,
-            height=dp(60),
-            spacing=dp(10)
-        )
 
         clear_btn = RoundButton(
             text="مسح",
@@ -1911,19 +2071,14 @@ class LetterLessonScreen(BaseScreen):
             height=55
         )
         clear_btn.bind(on_release=lambda *_: self.drawing_area.clear())
-
-        done_btn = RoundButton(
-            text="أكملت",
-            button_color=GREEN,
-            height=55
-        )
-        done_btn.bind(on_release=lambda *_: self.complete_letter())
-
-        buttons.add_widget(clear_btn)
-        buttons.add_widget(done_btn)
-        self.root_layout.add_widget(buttons)
+        self.root_layout.add_widget(clear_btn)
 
         self.root_layout.add_widget(self.build_footer_buttons())
+
+    def on_drawing_complete(self):
+        app = App.get_running_app()
+        app.play_audio("cheer.wav")
+        Clock.schedule_once(lambda dt: self.complete_letter(), 1.0)
 
     def build_example_stage(self):
         self.root_layout.add_widget(make_label(
