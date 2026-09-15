@@ -75,7 +75,6 @@ except Exception:
 
 
 def _reverse_arabic(text):
-    """عكس النص العربي كلمة بكلمة."""
     if not text:
         return text
 
@@ -328,7 +327,6 @@ class RoundedCard(ButtonBehavior, BoxLayout):
 # ============================================================
 
 class CelebrationWidget(Widget):
-    """تأثير احتفالي: فقاعات ملونة + نجوم."""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -653,7 +651,6 @@ class MainMenuScreen(BaseScreen):
 
         self.root_layout.clear_widgets()
 
-        # ---------- Header ----------
         header = BoxLayout(
             orientation="horizontal",
             size_hint_y=None,
@@ -698,7 +695,6 @@ class MainMenuScreen(BaseScreen):
 
         self.root_layout.add_widget(header)
 
-        # ---------- Grid ----------
         scroll = ScrollView(do_scroll_x=False)
         grid = GridLayout(
             cols=2, spacing=dp(12), padding=dp(8), size_hint_y=None
@@ -762,13 +758,11 @@ class MainMenuScreen(BaseScreen):
         scroll.add_widget(grid)
         self.root_layout.add_widget(scroll)
 
-        # ---------- Footer text ----------
         self.root_layout.add_widget(make_label(
             "اختر نشاطًا لنبدأ!", size=17, color=MUTED,
             size_hint_y=None, height=dp(36)
         ))
 
-        # ---------- Exit row ----------
         exit_row = BoxLayout(
             orientation="horizontal",
             size_hint_y=None,
@@ -1626,7 +1620,6 @@ LETTERS_DATA = [
 # ============================================================
 
 class LettersListScreen(BaseScreen):
-    """شاشة قائمة الحروف العربية."""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -1733,24 +1726,47 @@ class LettersListScreen(BaseScreen):
 
 
 # ============================================================
-# DRAWING AREA
+# DRAWING AREA (يستخدم صور PNG)
 # ============================================================
 
 class DrawingArea(Widget):
-    """منطقة لرسم الحرف بإصبع الطفل."""
+    """منطقة لرسم الحرف مباشرة فوق صورته."""
 
-    def __init__(self, **kwargs):
+    def __init__(self, letter_id="alef", **kwargs):
         super().__init__(**kwargs)
+
+        self.letter_id = letter_id
         self._last_x = None
         self._last_y = None
 
+        # صورة الحرف الباهت (مع نقطة البداية والسهم)
+        self.letter_image = Image(
+            source=image_path(
+                f"letters/letter_{letter_id}_trace.png"
+            ),
+            allow_stretch=True,
+            keep_ratio=True,
+            size_hint=(1, 1),
+        )
+        self.add_widget(self.letter_image)
+
+        self.bind(pos=self._update_children, size=self._update_children)
+
+        # الرسم فوق كل شيء
+        with self.canvas.after:
+            Color(*BLUE)
+
+    def _update_children(self, *args):
+        self.letter_image.pos = self.pos
+        self.letter_image.size = self.size
+
     def on_touch_down(self, touch):
         if self.collide_point(*touch.pos):
-            with self.canvas:
+            with self.canvas.after:
                 Color(*BLUE)
                 Line(
                     points=[touch.x, touch.y, touch.x + 0.5, touch.y + 0.5],
-                    width=dp(15),
+                    width=dp(18),
                     cap="round",
                     joint="round"
                 )
@@ -1761,11 +1777,11 @@ class DrawingArea(Widget):
 
     def on_touch_move(self, touch):
         if self.collide_point(*touch.pos) and self._last_x is not None:
-            with self.canvas:
+            with self.canvas.after:
                 Color(*BLUE)
                 Line(
                     points=[self._last_x, self._last_y, touch.x, touch.y],
-                    width=dp(15),
+                    width=dp(18),
                     cap="round",
                     joint="round"
                 )
@@ -1780,7 +1796,9 @@ class DrawingArea(Widget):
         return False
 
     def clear(self):
-        self.canvas.clear()
+        self.canvas.after.clear()
+        with self.canvas.after:
+            Color(*BLUE)
 
 
 # ============================================================
@@ -1788,7 +1806,6 @@ class DrawingArea(Widget):
 # ============================================================
 
 class LetterLessonScreen(BaseScreen):
-    """درس حرف واحد بـ 3 مراحل."""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -1830,9 +1847,6 @@ class LetterLessonScreen(BaseScreen):
         elif self.current_stage == 2:
             self.build_example_stage()
 
-    # --------------------------------------------------------
-    # المرحلة 1: التعرف على الحرف
-    # --------------------------------------------------------
     def build_recognition_stage(self):
         self.root_layout.add_widget(make_label(
             "المرحلة 1: تعرّف على الحرف",
@@ -1865,9 +1879,6 @@ class LetterLessonScreen(BaseScreen):
 
         self.root_layout.add_widget(self.build_footer_buttons())
 
-    # --------------------------------------------------------
-    # المرحلة 2: الكتابة الحرة
-    # --------------------------------------------------------
     def build_writing_stage(self):
         self.root_layout.add_widget(make_label(
             "المرحلة 2: اكتب الحرف",
@@ -1875,20 +1886,16 @@ class LetterLessonScreen(BaseScreen):
             size_hint_y=None, height=dp(30)
         ))
 
-        self.root_layout.add_widget(make_label(
-            self.letter_data["letter"],
-            size=180,
-            color=(0.85, 0.88, 0.92, 1),
-            size_hint_y=None,
-            height=dp(200)
-        ))
-
-        self.drawing_area = DrawingArea(size_hint_y=0.5)
+        # منطقة الرسم (تستخدم صورة الحرف + نقطة البداية)
+        self.drawing_area = DrawingArea(
+            letter_id=self.letter_data["id"],
+            size_hint_y=0.8,
+        )
         self.root_layout.add_widget(self.drawing_area)
 
         self.root_layout.add_widget(make_label(
-            "ارسم الحرف بإصبعك",
-            size=16, color=MUTED,
+            "اتبع النقطة الخضراء وارسم فوق الحرف",
+            size=15, color=MUTED,
             size_hint_y=None, height=dp(30)
         ))
 
@@ -1918,9 +1925,6 @@ class LetterLessonScreen(BaseScreen):
 
         self.root_layout.add_widget(self.build_footer_buttons())
 
-    # --------------------------------------------------------
-    # المرحلة 3: المثال
-    # --------------------------------------------------------
     def build_example_stage(self):
         self.root_layout.add_widget(make_label(
             "المرحلة 3: مثال",
@@ -1928,10 +1932,8 @@ class LetterLessonScreen(BaseScreen):
             size_hint_y=None, height=dp(30)
         ))
 
-        # مساحة علوية
         self.root_layout.add_widget(Widget(size_hint_y=0.1))
 
-        # الحرف
         self.root_layout.add_widget(make_label(
             self.letter_data["letter"],
             size=110,
@@ -1940,7 +1942,6 @@ class LetterLessonScreen(BaseScreen):
             height=dp(140)
         ))
 
-        # علامة =
         self.root_layout.add_widget(make_label(
             "=",
             size=50,
@@ -1949,7 +1950,6 @@ class LetterLessonScreen(BaseScreen):
             height=dp(70)
         ))
 
-        # الكلمة
         self.root_layout.add_widget(make_label(
             self.letter_data["word"],
             size=70,
@@ -1958,7 +1958,6 @@ class LetterLessonScreen(BaseScreen):
             height=dp(110)
         ))
 
-        # الشرح
         self.root_layout.add_widget(make_label(
             f"يبدأ بحرف {self.letter_data['name']}",
             size=22,
@@ -1967,10 +1966,8 @@ class LetterLessonScreen(BaseScreen):
             height=dp(50)
         ))
 
-        # مساحة سفلية
         self.root_layout.add_widget(Widget(size_hint_y=0.1))
 
-        # زر الإنهاء
         finish_btn = RoundButton(
             text="أنهيت الدرس",
             button_color=GOLD,
@@ -1981,9 +1978,6 @@ class LetterLessonScreen(BaseScreen):
 
         self.root_layout.add_widget(self.build_footer_buttons())
 
-    # --------------------------------------------------------
-    # التنقل بين المراحل
-    # --------------------------------------------------------
     def next_stage(self):
         if self.current_stage < 2:
             self.current_stage += 1
