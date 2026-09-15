@@ -372,7 +372,7 @@ class BaseScreen(Screen):
         return header
 
     def build_footer_buttons(self):
-        """شريط سفلي: زر الرجوع فقط"""
+        """شريط سفلي: زر الرجوع فقط (زر الخروج في القائمة الرئيسية)."""
         footer = BoxLayout(
             orientation="horizontal",
             size_hint_y=None,
@@ -491,7 +491,7 @@ class MainMenuScreen(BaseScreen):
 
         self.root_layout.clear_widgets()
 
-        # Header
+        # ---------- Header ----------
         header = BoxLayout(
             orientation="horizontal",
             size_hint_y=None,
@@ -536,7 +536,7 @@ class MainMenuScreen(BaseScreen):
 
         self.root_layout.add_widget(header)
 
-        # Grid
+        # ---------- Grid ----------
         scroll = ScrollView(do_scroll_x=False)
         grid = GridLayout(
             cols=2, spacing=dp(12), padding=dp(8), size_hint_y=None
@@ -600,13 +600,13 @@ class MainMenuScreen(BaseScreen):
         scroll.add_widget(grid)
         self.root_layout.add_widget(scroll)
 
-        # Footer text
+        # ---------- Footer text ----------
         self.root_layout.add_widget(make_label(
             "اختر نشاطًا لنبدأ!", size=17, color=MUTED,
             size_hint_y=None, height=dp(36)
         ))
 
-        # Exit row
+        # ---------- Exit row ----------
         exit_row = BoxLayout(
             orientation="horizontal",
             size_hint_y=None,
@@ -717,6 +717,7 @@ class StepScreen(BaseScreen):
         buttons.add_widget(self.next_button)
         self.main_layout.add_widget(buttons)
 
+        # Footer: زر الرجوع فقط
         self.main_layout.add_widget(self.build_footer_buttons())
 
         self.update_step()
