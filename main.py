@@ -16,6 +16,7 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.image import Image
 from kivy.uix.label import Label
+from kivy.uix.popup import Popup
 from kivy.uix.screenmanager import Screen, ScreenManager, SlideTransition
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.widget import Widget
@@ -331,20 +332,26 @@ class BaseScreen(Screen):
         header = BoxLayout(
             orientation="horizontal",
             size_hint_y=None,
-            height=dp(65),
+            height=dp(75),
             spacing=dp(8),
-            padding=(dp(15), dp(8))
+            padding=(dp(10), dp(10))
         )
 
-        header.add_widget(Widget(size_hint_x=None, width=dp(80)))
+        header.add_widget(Widget(size_hint_x=None, width=dp(70)))
 
-        title_label = make_label(title, size=23, color=NAVY)
+        title_label = make_label(
+            title,
+            size=21,
+            color=NAVY,
+            size_hint_y=None,
+            height=dp(55),
+        )
         header.add_widget(title_label)
 
         star_box = BoxLayout(
             orientation="horizontal",
             size_hint_x=None,
-            width=dp(90),
+            width=dp(85),
             spacing=dp(2),
         )
         star_icon = Image(
@@ -352,7 +359,7 @@ class BaseScreen(Screen):
             allow_stretch=True,
             keep_ratio=True,
             size_hint_x=None,
-            width=dp(28),
+            width=dp(26),
         )
         star_box.add_widget(star_icon)
 
@@ -362,7 +369,7 @@ class BaseScreen(Screen):
             size=18,
             color=GOLD,
             size_hint_x=None,
-            width=dp(50),
+            width=dp(45),
         )
         star_box.add_widget(stars)
 
@@ -372,22 +379,79 @@ class BaseScreen(Screen):
         return header
 
     def build_footer_buttons(self):
-        """شريط سفلي: زر الرجوع فقط (زر الخروج في القائمة الرئيسية)."""
+        """شريط سفلي: زر رجوع فقط (بحجم أصغر)."""
         footer = BoxLayout(
             orientation="horizontal",
             size_hint_y=None,
-            height=dp(62),
+            height=dp(55),
             spacing=dp(10),
-            padding=(dp(10), dp(6))
+            padding=(dp(15), dp(6))
         )
 
-        back_button = IconButton("icon_back.png", width=52)
+        back_button = IconButton("icon_back.png", width=40)
         back_button.bind(on_release=lambda *_: self.go_main())
         footer.add_widget(back_button)
 
         footer.add_widget(Widget())
 
         return footer
+
+    def confirm_exit(self):
+        """نافذة تأكيد الخروج"""
+        content = BoxLayout(
+            orientation="vertical",
+            padding=dp(20),
+            spacing=dp(15)
+        )
+
+        message = make_label(
+            "هل تريد الخروج من التطبيق؟",
+            size=20,
+            color=TEXT,
+            size_hint_y=None,
+            height=dp(60)
+        )
+        content.add_widget(message)
+
+        buttons = BoxLayout(
+            orientation="horizontal",
+            size_hint_y=None,
+            height=dp(55),
+            spacing=dp(10)
+        )
+
+        cancel_btn = RoundButton(
+            text="لا",
+            button_color=MUTED,
+            height=50
+        )
+        cancel_btn.bind(on_release=lambda *_: popup.dismiss())
+
+        yes_btn = RoundButton(
+            text="نعم",
+            button_color=RED,
+            height=50
+        )
+        yes_btn.bind(on_release=lambda *_: self._do_exit(popup))
+
+        buttons.add_widget(cancel_btn)
+        buttons.add_widget(yes_btn)
+        content.add_widget(buttons)
+
+        popup = Popup(
+            title=ar("تأكيد"),
+            title_font="Arabic",
+            content=content,
+            size_hint=(0.85, None),
+            height=dp(230),
+            auto_dismiss=False,
+            separator_color=NAVY,
+        )
+        popup.open()
+
+    def _do_exit(self, popup):
+        popup.dismiss()
+        App.get_running_app().stop()
 
     def exit_app(self):
         App.get_running_app().stop()
@@ -398,6 +462,9 @@ class BaseScreen(Screen):
             self.star_header.text = f"{app.stars}"
 
     def go_main(self):
+        # إيقاف الصوت عند الرجوع
+        App.get_running_app().stop_audio()
+
         manager = self.manager
         if manager:
             manager.transition = SlideTransition(direction="right")
@@ -600,7 +667,7 @@ class MainMenuScreen(BaseScreen):
         scroll.add_widget(grid)
         self.root_layout.add_widget(scroll)
 
-        # ---------- Footer text ----------
+        # ---------- Footer ----------
         self.root_layout.add_widget(make_label(
             "اختر نشاطًا لنبدأ!", size=17, color=MUTED,
             size_hint_y=None, height=dp(36)
@@ -618,7 +685,7 @@ class MainMenuScreen(BaseScreen):
         exit_row.add_widget(Widget())
 
         exit_icon = IconButton("icon_exit.png", width=42)
-        exit_icon.bind(on_release=lambda *_: self.exit_app())
+        exit_icon.bind(on_release=lambda *_: self.confirm_exit())
         exit_row.add_widget(exit_icon)
 
         exit_row.add_widget(make_label(
@@ -634,6 +701,7 @@ class MainMenuScreen(BaseScreen):
         App.get_running_app().stop()
 
     def open_section(self, name):
+        App.get_running_app().stop_audio()
         if self.manager:
             self.manager.transition = SlideTransition(direction="left")
             self.manager.current = name
@@ -667,7 +735,11 @@ class StepScreen(BaseScreen):
         self.current_step = 0
         self.finished = False
         self.build_ui()
-        Clock.schedule_once(lambda dt: self.play_current_audio(), 0.4)
+        # لا تشغيل تلقائي للصوت
+
+    def on_leave(self, *args):
+        """إيقاف الصوت عند مغادرة الشاشة."""
+        App.get_running_app().stop_audio()
 
     def build_ui(self):
 
@@ -717,7 +789,7 @@ class StepScreen(BaseScreen):
         buttons.add_widget(self.next_button)
         self.main_layout.add_widget(buttons)
 
-        # Footer: زر الرجوع فقط
+        # Footer: زر رجوع فقط
         self.main_layout.add_widget(self.build_footer_buttons())
 
         self.update_step()
@@ -754,7 +826,7 @@ class StepScreen(BaseScreen):
         if self.current_step > 0:
             self.current_step -= 1
             self.update_step()
-            self.play_current_audio()
+            # لا صوت تلقائي
 
     def next_step(self):
 
@@ -762,19 +834,14 @@ class StepScreen(BaseScreen):
             self.current_step = 0
             self.finished = False
             self.update_step()
-            self.play_current_audio()
             return
 
         if self.current_step < len(self.steps) - 1:
             App.get_running_app().play_audio("cheer.wav")
             self.current_step += 1
-            Clock.schedule_once(lambda dt: self.update_and_play(), 0.7)
+            Clock.schedule_once(lambda dt: self.update_step(), 0.7)
         else:
             self.finish_activity()
-
-    def update_and_play(self):
-        self.update_step()
-        self.play_current_audio()
 
     def finish_activity(self):
         self.finished = True
@@ -945,6 +1012,9 @@ class FamilyScreen(BaseScreen):
 
         self.refresh_stars()
 
+    def on_leave(self, *args):
+        App.get_running_app().stop_audio()
+
     def person_selected(self, index, audio):
         self.tapped.add(index)
         App.get_running_app().play_audio(audio)
@@ -954,7 +1024,7 @@ class FamilyScreen(BaseScreen):
 
 
 # ============================================================
-# COMMUNICATION (6 بطاقات)
+# COMMUNICATION
 # ============================================================
 
 class CommunicationScreen(BaseScreen):
@@ -1037,6 +1107,9 @@ class CommunicationScreen(BaseScreen):
 
         self.refresh_stars()
 
+    def on_leave(self, *args):
+        App.get_running_app().stop_audio()
+
     def communication_selected(self, index, audio):
         self.used.add(index)
         App.get_running_app().play_audio(audio)
@@ -1115,6 +1188,9 @@ class FocusScreen(BaseScreen):
         self.root_layout.add_widget(self.build_footer_buttons())
 
         self.new_round()
+
+    def on_leave(self, *args):
+        App.get_running_app().stop_audio()
 
     def new_round(self):
         self.current_target = random.choice(self.targets)
@@ -1246,6 +1322,9 @@ class ShapesScreen(BaseScreen):
         self.root_layout.add_widget(self.build_footer_buttons())
 
         self.new_question()
+
+    def on_leave(self, *args):
+        App.get_running_app().stop_audio()
 
     def new_question(self):
         self.target = random.choice(self.shapes)
@@ -1506,6 +1585,15 @@ class AhmedWorldApp(App):
         except Exception:
             pass
 
+    def stop_audio(self):
+        """إيقاف أي صوت يعمل."""
+        try:
+            if self.current_sound:
+                self.current_sound.stop()
+                self.current_sound = None
+        except Exception:
+            pass
+
     def on_keyboard(self, window, key, scancode, codepoint, modifier):
         if key == 27:
             if self.root:
@@ -1513,11 +1601,15 @@ class AhmedWorldApp(App):
                 if current == "splash":
                     return True
                 elif current != "main_menu":
+                    # أوقف الصوت قبل الرجوع
+                    self.stop_audio()
                     self.root.transition = SlideTransition(direction="right")
                     self.root.current = "main_menu"
                     return True
                 else:
-                    App.get_running_app().stop()
+                    # في القائمة الرئيسية → نافذة تأكيد
+                    main_screen = self.root.get_screen("main_menu")
+                    main_screen.confirm_exit()
                     return True
             return False
         return False
