@@ -37,7 +37,6 @@ jobs:
           test -f buildozer.spec && echo "buildozer.spec ✓" || echo "buildozer.spec MISSING!"
           test -f app_icon.png && echo "app_icon.png ✓" || echo "app_icon.png MISSING!"
           test -f NotoNaskhArabic-Regular.ttf && echo "NotoNaskhArabic-Regular.ttf ✓" || echo "NotoNaskhArabic-Regular.ttf MISSING!"
-          test -f Cairo-Regular.ttf && echo "Cairo-Regular.ttf ✓" || echo "Cairo-Regular.ttf not found (optional)"
           echo ""
           echo "=== مجلد الصور ==="
           ls images/ | head -20
@@ -73,11 +72,18 @@ jobs:
           echo "PATH=${JAVA_HOME}/bin:${PATH}" >> $GITHUB_ENV
           java -version
 
-      - name: Install Buildozer
+      - name: Install Buildozer with pinned versions
         run: |
           python -m pip install --upgrade pip
+          pip install "setuptools<66"
           pip install buildozer
-          pip install cython==0.29.36
+          pip install "cython<3.0"
+
+      - name: Verify installs
+        run: |
+          python -c "import Cython; print('Cython version:', Cython.__version__)"
+          python -c "import setuptools; print('setuptools version:', setuptools.__version__)"
+          buildozer --version
 
       - name: Build APK
         run: |
