@@ -372,22 +372,22 @@ class BaseScreen(Screen):
         return header
 
     def build_footer_buttons(self):
-    """شريط سفلي: زر الرجوع فقط (زر الخروج في القائمة الرئيسية)"""
-    footer = BoxLayout(
-        orientation="horizontal",
-        size_hint_y=None,
-        height=dp(62),
-        spacing=dp(10),
-        padding=(dp(10), dp(6))
-    )
+        """شريط سفلي: زر الرجوع فقط"""
+        footer = BoxLayout(
+            orientation="horizontal",
+            size_hint_y=None,
+            height=dp(62),
+            spacing=dp(10),
+            padding=(dp(10), dp(6))
+        )
 
-    back_button = IconButton("icon_back.png", width=52)
-    back_button.bind(on_release=lambda *_: self.go_main())
-    footer.add_widget(back_button)
+        back_button = IconButton("icon_back.png", width=52)
+        back_button.bind(on_release=lambda *_: self.go_main())
+        footer.add_widget(back_button)
 
-    footer.add_widget(Widget())
+        footer.add_widget(Widget())
 
-    return footer
+        return footer
 
     def exit_app(self):
         App.get_running_app().stop()
@@ -600,7 +600,7 @@ class MainMenuScreen(BaseScreen):
         scroll.add_widget(grid)
         self.root_layout.add_widget(scroll)
 
-        # Footer: text
+        # Footer text
         self.root_layout.add_widget(make_label(
             "اختر نشاطًا لنبدأ!", size=17, color=MUTED,
             size_hint_y=None, height=dp(36)
@@ -717,7 +717,6 @@ class StepScreen(BaseScreen):
         buttons.add_widget(self.next_button)
         self.main_layout.add_widget(buttons)
 
-        # Footer with back + exit
         self.main_layout.add_widget(self.build_footer_buttons())
 
         self.update_step()
@@ -954,7 +953,7 @@ class FamilyScreen(BaseScreen):
 
 
 # ============================================================
-# COMMUNICATION (6 بطاقات، 2 أعمدة)
+# COMMUNICATION (6 بطاقات)
 # ============================================================
 
 class CommunicationScreen(BaseScreen):
@@ -1511,13 +1510,12 @@ class AhmedWorldApp(App):
             if self.root:
                 current = self.root.current
                 if current == "splash":
-                    return True  # منع الخروج من السبلاش
+                    return True
                 elif current != "main_menu":
                     self.root.transition = SlideTransition(direction="right")
                     self.root.current = "main_menu"
                     return True
                 else:
-                    # في القائمة الرئيسية → اخرج من التطبيق
                     App.get_running_app().stop()
                     return True
             return False
