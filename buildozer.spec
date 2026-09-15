@@ -12,11 +12,7 @@ version = 2.0
 
 icon.filename = %(source.dir)s/app_icon.png
 
-# شاشة بداية Android (تُعرض قبل Kivy)
-android.presplash_color = #F6F8FE
-android.presplash_image = images/app_icon.png
-
-requirements = python3,kivy==2.1.0,plyer,arabic-reshaper,pyjnius,pillow
+requirements = python3,kivy==2.1.0,plyer,arabic-reshaper,pillow
 
 p4a.branch = v2024.01.21
 p4a.bootstrap = sdl2
