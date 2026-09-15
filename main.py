@@ -2,13 +2,17 @@
 
 import os
 import random
+import math
 
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.audio import SoundLoader
 from kivy.core.text import LabelBase
 from kivy.core.window import Window
-from kivy.graphics import Color, RoundedRectangle, Rectangle
+from kivy.graphics import (
+    Color, RoundedRectangle, Rectangle,
+    Ellipse, Line
+)
 from kivy.metrics import dp
 from kivy.storage.jsonstore import JsonStore
 from kivy.uix.behaviors import ButtonBehavior
@@ -320,6 +324,100 @@ class RoundedCard(ButtonBehavior, BoxLayout):
 
 
 # ============================================================
+# CELEBRATION WIDGET
+# ============================================================
+
+class CelebrationWidget(Widget):
+    """تأثير احتفالي: فقاعات ملونة + نجوم."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.particles = []
+        self.active = False
+        self._clock_event = None
+
+    def start(self):
+        self.particles = []
+        self.active = True
+
+        for _ in range(40):
+            ptype = random.choice(["bubble", "star"])
+            self.particles.append({
+                "type": ptype,
+                "x": random.uniform(0, max(1, self.width)),
+                "y": self.height + random.uniform(0, 200),
+                "vx": random.uniform(-80, 80),
+                "vy": random.uniform(-450, -250),
+                "size": random.uniform(18, 45),
+                "color": random.choice([
+                    (1.0, 0.75, 0.20, 1),
+                    (0.30, 0.70, 1.00, 1),
+                    (1.00, 0.45, 0.65, 1),
+                    (0.35, 0.90, 0.55, 1),
+                    (1.00, 0.55, 0.20, 1),
+                ]),
+                "rotation": 0,
+                "rot_speed": random.uniform(-400, 400),
+            })
+
+        if self._clock_event:
+            self._clock_event.cancel()
+        self._clock_event = Clock.schedule_interval(self._update, 1/60.0)
+
+    def stop(self):
+        self.active = False
+        if self._clock_event:
+            self._clock_event.cancel()
+            self._clock_event = None
+        self.particles = []
+        self.canvas.clear()
+
+    def _update(self, dt):
+        if not self.active:
+            return
+        w = self.width
+        alive = []
+        for p in self.particles:
+            p["x"] += p["vx"] * dt
+            p["y"] += p["vy"] * dt
+            p["vy"] -= 250 * dt
+            p["rotation"] += p["rot_speed"] * dt
+            if p["x"] < 0 or p["x"] > w:
+                p["vx"] = -p["vx"]
+            if p["y"] > -80:
+                alive.append(p)
+        self.particles = alive
+        self._redraw()
+        if not self.particles:
+            self.stop()
+
+    def _redraw(self):
+        self.canvas.clear()
+        with self.canvas:
+            for p in self.particles:
+                Color(*p["color"])
+                if p["type"] == "bubble":
+                    s = p["size"]
+                    Ellipse(
+                        pos=(p["x"] - s/2, p["y"] - s/2),
+                        size=(s, s)
+                    )
+                else:
+                    s = p["size"]
+                    ang = math.radians(p["rotation"])
+                    for offset in (0, math.pi/2):
+                        dx = math.cos(ang + offset) * s/2
+                        dy = math.sin(ang + offset) * s/2
+                        Line(
+                            points=[
+                                p["x"] - dx, p["y"] - dy,
+                                p["x"] + dx, p["y"] + dy,
+                            ],
+                            width=dp(3),
+                        )
+
+
+# ============================================================
 # BASE SCREEN
 # ============================================================
 
@@ -379,7 +477,6 @@ class BaseScreen(Screen):
         return header
 
     def build_footer_buttons(self):
-        """شريط سفلي: زر رجوع فقط (بحجم أصغر)."""
         footer = BoxLayout(
             orientation="horizontal",
             size_hint_y=None,
@@ -397,7 +494,6 @@ class BaseScreen(Screen):
         return footer
 
     def confirm_exit(self):
-        """نافذة تأكيد الخروج"""
         content = BoxLayout(
             orientation="vertical",
             padding=dp(20),
@@ -462,9 +558,7 @@ class BaseScreen(Screen):
             self.star_header.text = f"{app.stars}"
 
     def go_main(self):
-        # إيقاف الصوت عند الرجوع
         App.get_running_app().stop_audio()
-
         manager = self.manager
         if manager:
             manager.transition = SlideTransition(direction="right")
@@ -538,6 +632,7 @@ class MainMenuScreen(BaseScreen):
         ("icon_focus.png", "التركيز والانتباه", "focus"),
         ("icon_family.png", "عائلتي", "family"),
         ("icon_shapes.png", "الأشكال", "shapes"),
+        ("icon_writing.png", "هيا نكتب", "letters"),
         ("icon_toilet.png", "الحمام", "toilet"),
         ("icon_wudu.png", "الوضوء", "wudu"),
         ("icon_communication.png", "أريد / التواصل", "communication"),
@@ -667,7 +762,7 @@ class MainMenuScreen(BaseScreen):
         scroll.add_widget(grid)
         self.root_layout.add_widget(scroll)
 
-        # ---------- Footer ----------
+        # ---------- Footer text ----------
         self.root_layout.add_widget(make_label(
             "اختر نشاطًا لنبدأ!", size=17, color=MUTED,
             size_hint_y=None, height=dp(36)
@@ -735,10 +830,8 @@ class StepScreen(BaseScreen):
         self.current_step = 0
         self.finished = False
         self.build_ui()
-        # لا تشغيل تلقائي للصوت
 
     def on_leave(self, *args):
-        """إيقاف الصوت عند مغادرة الشاشة."""
         App.get_running_app().stop_audio()
 
     def build_ui(self):
@@ -789,7 +882,6 @@ class StepScreen(BaseScreen):
         buttons.add_widget(self.next_button)
         self.main_layout.add_widget(buttons)
 
-        # Footer: زر رجوع فقط
         self.main_layout.add_widget(self.build_footer_buttons())
 
         self.update_step()
@@ -826,7 +918,6 @@ class StepScreen(BaseScreen):
         if self.current_step > 0:
             self.current_step -= 1
             self.update_step()
-            # لا صوت تلقائي
 
     def next_step(self):
 
@@ -1402,9 +1493,9 @@ class RewardsScreen(BaseScreen):
         ("التركيز والانتباه", "focus"),
         ("عائلتي", "family"),
         ("الأشكال", "shapes"),
+        ("أريد / التواصل", "communication"),
         ("الحمام", "toilet"),
         ("الوضوء", "wudu"),
-        ("أريد / التواصل", "communication"),
         ("النظافة", "hygiene"),
     ]
 
@@ -1495,6 +1586,460 @@ class RewardsScreen(BaseScreen):
 
 
 # ============================================================
+# LETTERS DATA
+# ============================================================
+
+LETTERS_DATA = [
+    {"id": "alef",  "letter": "أ",  "name": "ألف",  "word": "أسد",   "enabled": True},
+    {"id": "baa",   "letter": "ب",  "name": "باء",  "word": "بطة",   "enabled": True},
+    {"id": "taa",   "letter": "ت",  "name": "تاء",  "word": "تفاحة", "enabled": True},
+    {"id": "thaa",  "letter": "ث",  "name": "ثاء",  "word": "ثعلب",  "enabled": False},
+    {"id": "jeem",  "letter": "ج",  "name": "جيم",  "word": "جمل",   "enabled": False},
+    {"id": "haa",   "letter": "ح",  "name": "حاء",  "word": "حصان",  "enabled": False},
+    {"id": "khaa",  "letter": "خ",  "name": "خاء",  "word": "خروف",  "enabled": False},
+    {"id": "dal",   "letter": "د",  "name": "دال",  "word": "دب",    "enabled": False},
+    {"id": "thal",  "letter": "ذ",  "name": "ذال",  "word": "ذئب",   "enabled": False},
+    {"id": "raa",   "letter": "ر",  "name": "راء",  "word": "رمان",  "enabled": False},
+    {"id": "zay",   "letter": "ز",  "name": "زاي",  "word": "زرافة", "enabled": False},
+    {"id": "seen",  "letter": "س",  "name": "سين",  "word": "سمكة",  "enabled": False},
+    {"id": "sheen", "letter": "ش",  "name": "شين",  "word": "شمس",   "enabled": False},
+    {"id": "sad",   "letter": "ص",  "name": "صاد",  "word": "صقر",   "enabled": False},
+    {"id": "dad",   "letter": "ض",  "name": "ضاد",  "word": "ضفدع",  "enabled": False},
+    {"id": "taa2",  "letter": "ط",  "name": "طاء",  "word": "طائرة", "enabled": False},
+    {"id": "zaa",   "letter": "ظ",  "name": "ظاء",  "word": "ظرف",   "enabled": False},
+    {"id": "ain",   "letter": "ع",  "name": "عين",  "word": "عصفور", "enabled": False},
+    {"id": "ghain", "letter": "غ",  "name": "غين",  "word": "غزال",  "enabled": False},
+    {"id": "faa",   "letter": "ف",  "name": "فاء",  "word": "فيل",   "enabled": False},
+    {"id": "qaf",   "letter": "ق",  "name": "قاف",  "word": "قمر",   "enabled": False},
+    {"id": "kaf",   "letter": "ك",  "name": "كاف",  "word": "كتاب",  "enabled": False},
+    {"id": "lam",   "letter": "ل",  "name": "لام",  "word": "ليمون", "enabled": False},
+    {"id": "meem",  "letter": "م",  "name": "ميم",  "word": "موز",   "enabled": False},
+    {"id": "noon",  "letter": "ن",  "name": "نون",  "word": "نمر",   "enabled": False},
+    {"id": "haa2",  "letter": "ه",  "name": "هاء",  "word": "هاتف",  "enabled": False},
+    {"id": "waw",   "letter": "و",  "name": "واو",  "word": "وردة",  "enabled": False},
+    {"id": "yaa",   "letter": "ي",  "name": "ياء",  "word": "يد",    "enabled": False},
+]
+
+
+# ============================================================
+# LETTERS LIST SCREEN
+# ============================================================
+
+class LettersListScreen(BaseScreen):
+    """شاشة قائمة الحروف العربية."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.root_layout = BoxLayout(
+            orientation="vertical",
+            padding=dp(10),
+            spacing=dp(8)
+        )
+        self.add_widget(self.root_layout)
+
+    def on_enter(self, *args):
+        self.root_layout.clear_widgets()
+        self.root_layout.add_widget(self.build_header("هيا نكتب"))
+
+        self.root_layout.add_widget(make_label(
+            "اختر حرفاً لتتعلمه",
+            size=19, color=NAVY,
+            size_hint_y=None, height=dp(45)
+        ))
+
+        scroll = ScrollView(do_scroll_x=False)
+        grid = GridLayout(
+            cols=4,
+            spacing=dp(10),
+            padding=dp(8),
+            size_hint_y=None
+        )
+        grid.bind(minimum_height=grid.setter("height"))
+
+        app = App.get_running_app()
+
+        for letter_data in LETTERS_DATA:
+            letter_id = letter_data["id"]
+            is_completed = f"letter_{letter_id}" in app.completed
+            is_enabled = letter_data["enabled"]
+
+            if not is_enabled:
+                card_color = (0.90, 0.90, 0.92, 1)
+            elif is_completed:
+                card_color = (0.91, 0.98, 0.93, 1)
+            else:
+                card_color = (0.89, 0.95, 1.00, 1)
+
+            card = RoundedCard(
+                card_color=card_color,
+                size_hint_y=None,
+                height=dp(130)
+            )
+
+            letter_color = NAVY if is_enabled else MUTED
+
+            card.add_widget(make_label(
+                letter_data["letter"],
+                size=60,
+                color=letter_color,
+                size_hint_y=None,
+                height=dp(80)
+            ))
+
+            card.add_widget(make_label(
+                letter_data["name"],
+                size=14,
+                color=letter_color,
+                size_hint_y=None,
+                height=dp(28)
+            ))
+
+            if is_completed:
+                card.add_widget(make_label(
+                    "★", size=14, color=GOLD,
+                    size_hint_y=None, height=dp(22)
+                ))
+            elif not is_enabled:
+                card.add_widget(make_label(
+                    "🔒", size=14, color=MUTED,
+                    size_hint_y=None, height=dp(22)
+                ))
+
+            if is_enabled:
+                card.bind(
+                    on_release=lambda instance, data=letter_data:
+                    self.open_letter(data)
+                )
+
+            grid.add_widget(card)
+
+        scroll.add_widget(grid)
+        self.root_layout.add_widget(scroll)
+
+        self.root_layout.add_widget(self.build_footer_buttons())
+        self.refresh_stars()
+
+    def on_leave(self, *args):
+        App.get_running_app().stop_audio()
+
+    def open_letter(self, letter_data):
+        app = App.get_running_app()
+        app.current_letter = letter_data
+        app.stop_audio()
+
+        if self.manager:
+            self.manager.transition = SlideTransition(direction="left")
+            self.manager.current = "letter_lesson"
+
+
+# ============================================================
+# DRAWING AREA
+# ============================================================
+
+class DrawingArea(Widget):
+    """منطقة لرسم الحرف بإصبع الطفل."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._last_x = None
+        self._last_y = None
+
+    def on_touch_down(self, touch):
+        if self.collide_point(*touch.pos):
+            with self.canvas:
+                Color(*BLUE)
+                Line(
+                    points=[touch.x, touch.y, touch.x + 0.5, touch.y + 0.5],
+                    width=dp(15),
+                    cap="round",
+                    joint="round"
+                )
+            self._last_x = touch.x
+            self._last_y = touch.y
+            return True
+        return False
+
+    def on_touch_move(self, touch):
+        if self.collide_point(*touch.pos) and self._last_x is not None:
+            with self.canvas:
+                Color(*BLUE)
+                Line(
+                    points=[self._last_x, self._last_y, touch.x, touch.y],
+                    width=dp(15),
+                    cap="round",
+                    joint="round"
+                )
+            self._last_x = touch.x
+            self._last_y = touch.y
+            return True
+        return False
+
+    def on_touch_up(self, touch):
+        self._last_x = None
+        self._last_y = None
+        return False
+
+    def clear(self):
+        self.canvas.clear()
+
+
+# ============================================================
+# LETTER LESSON SCREEN
+# ============================================================
+
+class LetterLessonScreen(BaseScreen):
+    """درس حرف واحد بـ 3 مراحل."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        self.current_stage = 0
+        self.letter_data = None
+
+        self.root_layout = BoxLayout(
+            orientation="vertical",
+            padding=dp(10),
+            spacing=dp(8)
+        )
+        self.add_widget(self.root_layout)
+
+        self.celebration = CelebrationWidget()
+        self.add_widget(self.celebration)
+
+    def on_pre_enter(self, *args):
+        super().on_pre_enter(*args)
+        app = App.get_running_app()
+        self.letter_data = getattr(app, "current_letter", LETTERS_DATA[0])
+        self.current_stage = 0
+        self.build_stage()
+
+    def on_leave(self, *args):
+        App.get_running_app().stop_audio()
+        self.celebration.stop()
+
+    def build_stage(self):
+        self.root_layout.clear_widgets()
+        self.root_layout.add_widget(
+            self.build_header(f"حرف {self.letter_data['name']}")
+        )
+
+        if self.current_stage == 0:
+            self.build_recognition_stage()
+        elif self.current_stage == 1:
+            self.build_writing_stage()
+        elif self.current_stage == 2:
+            self.build_example_stage()
+
+    # --------------------------------------------------------
+    # المرحلة 1: التعرف على الحرف
+    # --------------------------------------------------------
+    def build_recognition_stage(self):
+        self.root_layout.add_widget(make_label(
+            "المرحلة 1: تعرّف على الحرف",
+            size=16, color=MUTED,
+            size_hint_y=None, height=dp(30)
+        ))
+
+        self.root_layout.add_widget(make_label(
+            self.letter_data["letter"],
+            size=180,
+            color=NAVY,
+            size_hint_y=0.65
+        ))
+
+        self.root_layout.add_widget(make_label(
+            self.letter_data["name"],
+            size=32,
+            color=GOLD,
+            size_hint_y=None,
+            height=dp(50)
+        ))
+
+        next_btn = RoundButton(
+            text="التالي",
+            button_color=GREEN,
+            height=55
+        )
+        next_btn.bind(on_release=lambda *_: self.next_stage())
+        self.root_layout.add_widget(next_btn)
+
+        self.root_layout.add_widget(self.build_footer_buttons())
+
+    # --------------------------------------------------------
+    # المرحلة 2: الكتابة الحرة
+    # --------------------------------------------------------
+    def build_writing_stage(self):
+        self.root_layout.add_widget(make_label(
+            "المرحلة 2: اكتب الحرف",
+            size=16, color=MUTED,
+            size_hint_y=None, height=dp(30)
+        ))
+
+        self.root_layout.add_widget(make_label(
+            self.letter_data["letter"],
+            size=180,
+            color=(0.85, 0.88, 0.92, 1),
+            size_hint_y=None,
+            height=dp(200)
+        ))
+
+        self.drawing_area = DrawingArea(size_hint_y=0.5)
+        self.root_layout.add_widget(self.drawing_area)
+
+        self.root_layout.add_widget(make_label(
+            "ارسم الحرف بإصبعك",
+            size=16, color=MUTED,
+            size_hint_y=None, height=dp(30)
+        ))
+
+        buttons = BoxLayout(
+            size_hint_y=None,
+            height=dp(60),
+            spacing=dp(10)
+        )
+
+        clear_btn = RoundButton(
+            text="مسح",
+            button_color=MUTED,
+            height=55
+        )
+        clear_btn.bind(on_release=lambda *_: self.drawing_area.clear())
+
+        done_btn = RoundButton(
+            text="أكملت",
+            button_color=GREEN,
+            height=55
+        )
+        done_btn.bind(on_release=lambda *_: self.complete_letter())
+
+        buttons.add_widget(clear_btn)
+        buttons.add_widget(done_btn)
+        self.root_layout.add_widget(buttons)
+
+        self.root_layout.add_widget(self.build_footer_buttons())
+
+    # --------------------------------------------------------
+    # المرحلة 3: المثال
+    # --------------------------------------------------------
+    def build_example_stage(self):
+        self.root_layout.add_widget(make_label(
+            "المرحلة 3: مثال",
+            size=16, color=MUTED,
+            size_hint_y=None, height=dp(30)
+        ))
+
+        # مساحة علوية
+        self.root_layout.add_widget(Widget(size_hint_y=0.1))
+
+        # الحرف
+        self.root_layout.add_widget(make_label(
+            self.letter_data["letter"],
+            size=110,
+            color=NAVY,
+            size_hint_y=None,
+            height=dp(140)
+        ))
+
+        # علامة =
+        self.root_layout.add_widget(make_label(
+            "=",
+            size=50,
+            color=MUTED,
+            size_hint_y=None,
+            height=dp(70)
+        ))
+
+        # الكلمة
+        self.root_layout.add_widget(make_label(
+            self.letter_data["word"],
+            size=70,
+            color=GOLD,
+            size_hint_y=None,
+            height=dp(110)
+        ))
+
+        # الشرح
+        self.root_layout.add_widget(make_label(
+            f"يبدأ بحرف {self.letter_data['name']}",
+            size=22,
+            color=MUTED,
+            size_hint_y=None,
+            height=dp(50)
+        ))
+
+        # مساحة سفلية
+        self.root_layout.add_widget(Widget(size_hint_y=0.1))
+
+        # زر الإنهاء
+        finish_btn = RoundButton(
+            text="أنهيت الدرس",
+            button_color=GOLD,
+            height=55
+        )
+        finish_btn.bind(on_release=lambda *_: self.finish_lesson())
+        self.root_layout.add_widget(finish_btn)
+
+        self.root_layout.add_widget(self.build_footer_buttons())
+
+    # --------------------------------------------------------
+    # التنقل بين المراحل
+    # --------------------------------------------------------
+    def next_stage(self):
+        if self.current_stage < 2:
+            self.current_stage += 1
+            self.build_stage()
+        else:
+            self.finish_lesson()
+
+    def complete_letter(self):
+        self.current_stage = 2
+        self.build_stage()
+
+    def finish_lesson(self):
+        app = App.get_running_app()
+        app.award_star(f"letter_{self.letter_data['id']}")
+        app.play_audio("cheer.wav")
+
+        self.celebration.start()
+
+        self.root_layout.clear_widgets()
+        self.root_layout.add_widget(self.build_header(
+            f"حرف {self.letter_data['name']}"
+        ))
+
+        self.root_layout.add_widget(make_label(
+            "★",
+            size=100,
+            color=GOLD,
+            size_hint_y=0.35
+        ))
+
+        self.root_layout.add_widget(make_label(
+            "أحسنت يا أحمد!",
+            size=32,
+            color=GREEN,
+            size_hint_y=None,
+            height=dp(70)
+        ))
+
+        self.root_layout.add_widget(make_label(
+            f"تعلمت حرف {self.letter_data['name']}",
+            size=22,
+            color=NAVY,
+            size_hint_y=None,
+            height=dp(50)
+        ))
+
+        Clock.schedule_once(self._return_to_list, 3.5)
+
+    def _return_to_list(self, dt):
+        self.celebration.stop()
+        if self.manager:
+            self.manager.transition = SlideTransition(direction="right")
+            self.manager.current = "letters"
+
+
+# ============================================================
 # MAIN APP
 # ============================================================
 
@@ -1515,6 +2060,7 @@ class AhmedWorldApp(App):
 
         self.sound_cache = {}
         self.current_sound = None
+        self.current_letter = None
 
         manager = ScreenManager(
             transition=SlideTransition(duration=0.25)
@@ -1530,6 +2076,8 @@ class AhmedWorldApp(App):
         manager.add_widget(CommunicationScreen(name="communication"))
         manager.add_widget(HygieneScreen(name="hygiene"))
         manager.add_widget(RewardsScreen(name="rewards"))
+        manager.add_widget(LettersListScreen(name="letters"))
+        manager.add_widget(LetterLessonScreen(name="letter_lesson"))
 
         manager.current = "splash"
 
@@ -1586,7 +2134,6 @@ class AhmedWorldApp(App):
             pass
 
     def stop_audio(self):
-        """إيقاف أي صوت يعمل."""
         try:
             if self.current_sound:
                 self.current_sound.stop()
@@ -1601,13 +2148,11 @@ class AhmedWorldApp(App):
                 if current == "splash":
                     return True
                 elif current != "main_menu":
-                    # أوقف الصوت قبل الرجوع
                     self.stop_audio()
                     self.root.transition = SlideTransition(direction="right")
                     self.root.current = "main_menu"
                     return True
                 else:
-                    # في القائمة الرئيسية → نافذة تأكيد
                     main_screen = self.root.get_screen("main_menu")
                     main_screen.confirm_exit()
                     return True
