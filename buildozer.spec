@@ -12,9 +12,9 @@ version = 2.0
 
 icon.filename = %(source.dir)s/app_icon.png
 
-requirements = python3,kivy==2.1.0,plyer,arabic-reshaper,pillow
+requirements = python3,kivy==2.1.0,arabic-reshaper,pillow
 
-p4a.branch = v2024.01.21
+p4a.branch = develop
 p4a.bootstrap = sdl2
 
 orientation = portrait
